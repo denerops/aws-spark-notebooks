@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { buildCancelledHtml, buildErrorHtml } from './htmlError';
+import { buildCancelledHtml } from './htmlError';
 import { extractErrorMessage } from './errorMessage';
 
 export const ERROR_MIME = 'application/vnd.emr-spark.error+json';
@@ -15,13 +15,11 @@ export function mapErrorToOutputs(
 ): vscode.NotebookCellOutput[] {
   const message = extractErrorMessage(error);
   const payload: ErrorPayload = { message, executionTimeMs };
-  const html = buildErrorHtml(message, executionTimeMs);
 
   return [
     new vscode.NotebookCellOutput([
-      vscode.NotebookCellOutputItem.text(html, 'text/html'),
-      vscode.NotebookCellOutputItem.text(message, 'text/plain'),
       vscode.NotebookCellOutputItem.json(payload, ERROR_MIME),
+      vscode.NotebookCellOutputItem.text(message, 'text/plain'),
     ]),
   ];
 }
