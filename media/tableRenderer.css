@@ -1,0 +1,466 @@
+.duckdb-table-output {
+  --duckdb-accent: var(--vscode-textLink-foreground, #3794ff);
+  --duckdb-border: var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.45)));
+  --duckdb-muted: var(--vscode-descriptionForeground, #9da5b4);
+  --duckdb-surface: var(--vscode-editor-background, #1e1e1e);
+  --duckdb-surface-2: var(--vscode-sideBar-background, #252526);
+  --duckdb-surface-3: var(--vscode-input-background, #3c3c3c);
+  --duckdb-hover: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.16));
+  --duckdb-header-bg: var(--vscode-list-activeSelectionBackground, rgba(55, 148, 255, 0.14));
+  --duckdb-zebra: rgba(128, 128, 128, 0.1);
+  --duckdb-radius: 10px;
+  --duckdb-mono: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, monospace);
+
+  font-family: var(--vscode-font-family, system-ui, sans-serif);
+  font-size: 12px;
+  color: var(--vscode-foreground, #cccccc);
+  line-height: 1.4;
+  margin: 4px 0;
+}
+
+.duckdb-result-card {
+  border: 1px solid var(--duckdb-border);
+  border-radius: var(--duckdb-radius);
+  background: var(--duckdb-surface);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.duckdb-table-banner {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--duckdb-border);
+  background: rgba(255, 184, 107, 0.12);
+  color: var(--vscode-editorWarning-foreground, #e3b341);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.duckdb-footer-hint {
+  flex: 1 1 100%;
+  font-size: 10px;
+  color: var(--duckdb-muted);
+}
+
+.duckdb-count-btn {
+  border: 1px solid var(--duckdb-border);
+  border-radius: 4px;
+  background: var(--duckdb-surface-3);
+  color: var(--vscode-foreground, #cccccc);
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.duckdb-count-btn:hover:not(:disabled) {
+  background: var(--duckdb-hover);
+  border-color: var(--duckdb-accent);
+}
+
+.duckdb-count-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.duckdb-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.duckdb-footer-search {
+  display: flex;
+  align-items: center;
+}
+
+.duckdb-footer-search .duckdb-search {
+  width: 180px;
+}
+
+.duckdb-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--duckdb-border);
+  border-radius: 4px;
+  background: var(--duckdb-surface-3);
+  color: var(--vscode-foreground, #cccccc);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.duckdb-search-icon {
+  width: 14px;
+  height: 14px;
+  opacity: 0.85;
+}
+
+.duckdb-search-btn:hover {
+  background: var(--duckdb-hover);
+  border-color: var(--duckdb-accent);
+}
+
+.duckdb-hidden {
+  display: none !important;
+}
+
+.duckdb-search {
+  padding: 6px 10px;
+  border: 1px solid var(--vscode-input-border, var(--duckdb-border));
+  border-radius: 5px;
+  background: var(--vscode-input-background, var(--duckdb-surface-3));
+  color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  color-scheme: light dark;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.duckdb-search::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--duckdb-muted));
+  opacity: 0.9;
+}
+
+.duckdb-search:focus {
+  border-color: var(--duckdb-accent);
+  box-shadow: 0 0 0 1px var(--duckdb-accent);
+}
+
+.duckdb-table-scroll {
+  overflow: auto;
+  max-height: 480px;
+}
+
+.duckdb-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.duckdb-table thead tr {
+  background: var(--duckdb-header-bg);
+}
+
+.duckdb-table th,
+.duckdb-table td {
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--duckdb-border);
+  text-align: left;
+  vertical-align: middle;
+  max-width: 360px;
+}
+
+.duckdb-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--duckdb-header-bg);
+  font-weight: 700;
+  user-select: none;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--duckdb-accent);
+  color: var(--vscode-foreground, #cccccc);
+}
+
+.duckdb-table th.duckdb-sortable {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.duckdb-table th.duckdb-sortable:hover {
+  background: var(--duckdb-hover);
+}
+
+.duckdb-th-inner {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.duckdb-col-name {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.duckdb-col-type {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  border: 1px solid transparent;
+}
+
+.duckdb-type-varchar { color: #d2a8ff; background: rgba(210, 168, 255, 0.14); border-color: rgba(210, 168, 255, 0.32); }
+.duckdb-type-double { color: #58a6ff; background: rgba(88, 166, 255, 0.14); border-color: rgba(88, 166, 255, 0.32); }
+.duckdb-type-integer { color: #3fb950; background: rgba(63, 185, 80, 0.14); border-color: rgba(63, 185, 80, 0.32); }
+.duckdb-type-boolean { color: #ffb86b; background: rgba(255, 184, 107, 0.16); border-color: rgba(255, 184, 107, 0.35); }
+.duckdb-type-json { color: #ff7b72; background: rgba(255, 123, 114, 0.14); border-color: rgba(255, 123, 114, 0.32); }
+.duckdb-type-unknown { color: #8b949e; background: rgba(139, 148, 158, 0.12); border-color: rgba(139, 148, 158, 0.28); }
+
+.duckdb-sort-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.45;
+  font-size: 11px;
+}
+
+.duckdb-table th.duckdb-sortable {
+  position: sticky;
+  padding-right: 28px;
+}
+
+.duckdb-table th.duckdb-sorted-asc .duckdb-sort-icon,
+.duckdb-table th.duckdb-sorted-desc .duckdb-sort-icon {
+  opacity: 1;
+  color: var(--duckdb-accent);
+}
+
+.duckdb-table tbody tr {
+  background: var(--duckdb-surface);
+  transition: background 0.1s ease;
+}
+
+.duckdb-table tbody tr:nth-child(even) {
+  background: var(--duckdb-zebra);
+}
+
+.duckdb-table tbody tr:hover {
+  background: var(--duckdb-hover) !important;
+}
+
+.duckdb-row-num {
+  width: 40px;
+  min-width: 40px;
+  text-align: right !important;
+  color: var(--duckdb-muted) !important;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: var(--duckdb-surface-2) !important;
+  border-right: 1px solid var(--duckdb-border);
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.duckdb-table thead .duckdb-row-num {
+  z-index: 3;
+  background: var(--duckdb-header-bg) !important;
+  border-bottom: 2px solid var(--duckdb-accent);
+}
+
+.duckdb-cell {
+  font-family: var(--duckdb-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--vscode-foreground, #cccccc);
+}
+
+.duckdb-cell-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.duckdb-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.duckdb-badge-true {
+  background: rgba(46, 160, 67, 0.2);
+  color: #3fb950;
+}
+
+.duckdb-badge-false {
+  background: rgba(248, 81, 73, 0.18);
+  color: #f85149;
+}
+
+.duckdb-null {
+  color: var(--duckdb-muted);
+  font-style: italic;
+}
+
+.duckdb-json {
+  color: var(--duckdb-accent);
+  cursor: help;
+}
+
+.duckdb-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 7px 12px;
+  border-top: 1px solid var(--duckdb-border);
+  background: var(--duckdb-surface-2);
+  color: var(--duckdb-muted);
+  font-size: 11px;
+}
+
+.duckdb-footer-time {
+  color: var(--duckdb-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.duckdb-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--duckdb-muted);
+  font-style: italic;
+}
+
+.duckdb-ok {
+  padding: 20px;
+  text-align: center;
+  color: var(--duckdb-muted);
+}
+
+.duckdb-error-card {
+  border: 1px solid var(--vscode-editorError-foreground, #f85149);
+  border-radius: var(--duckdb-radius);
+  background: rgba(248, 81, 73, 0.08);
+  overflow: hidden;
+}
+
+.duckdb-error-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(248, 81, 73, 0.35);
+  background: rgba(248, 81, 73, 0.12);
+}
+
+.duckdb-error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--vscode-editorError-foreground, #f85149);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.duckdb-error-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--vscode-editorError-foreground, #f85149);
+}
+
+.duckdb-error-message {
+  padding: 10px 12px;
+  font-family: var(--duckdb-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--vscode-foreground, #cccccc);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.duckdb-error-footer {
+  padding: 6px 12px 8px;
+  border-top: 1px solid rgba(248, 81, 73, 0.2);
+  font-size: 11px;
+  color: var(--duckdb-muted);
+  text-align: right;
+}
+
+.duckdb-cancelled-card {
+  border-color: var(--duckdb-border);
+  background: var(--duckdb-surface-2);
+}
+
+.duckdb-dashboard-card {
+  border: 1px solid var(--duckdb-border);
+  border-radius: var(--duckdb-radius);
+  background: var(--duckdb-surface-2);
+  padding: 10px 12px;
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.duckdb-dashboard-card a {
+  color: var(--duckdb-accent);
+  text-decoration: none;
+}
+
+.duckdb-dashboard-card a:hover {
+  text-decoration: underline;
+}
+
+.emr-exec-progress-card {
+  border: 1px solid var(--duckdb-border);
+  border-radius: var(--duckdb-radius);
+  background: var(--duckdb-surface-2);
+  padding: 10px 12px;
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.emr-exec-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.emr-exec-message {
+  color: var(--vscode-foreground, #cccccc);
+  font-variant-numeric: tabular-nums;
+}
+
+.emr-exec-links {
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.emr-exec-spark-link {
+  color: var(--duckdb-accent);
+  text-decoration: none;
+}
+
+.emr-exec-spark-link:hover {
+  text-decoration: underline;
+}
+
+.emr-exec-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--duckdb-border);
+  border-top-color: var(--duckdb-accent);
+  border-radius: 50%;
+  animation: emr-exec-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes emr-exec-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,455 @@
+{
+  "name": "emr-serverless-pyspark",
+  "displayName": "EMR Serverless PySpark",
+  "description": "Run PySpark and Spark SQL in .sparknb and .ipynb notebooks on EMR Serverless via Apache Livy",
+  "version": "0.1.0",
+  "publisher": "emr-serverless",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Notebooks",
+    "Data Science"
+  ],
+  "keywords": [
+    "aws",
+    "emr",
+    "serverless",
+    "spark",
+    "pyspark",
+    "livy",
+    "notebook"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onNotebook:emr-spark",
+    "onNotebookSerializer:emr-spark",
+    "onRenderer:emr-spark-table-renderer",
+    "onView:emrServerlessApplications",
+    "onView:emrServerlessSessionPresets"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configurationDefaults": {
+      "workbench.editorAssociations": {
+        "*.ipynb": "emr-spark"
+      }
+    },
+    "notebooks": [
+      {
+        "type": "emr-spark",
+        "displayName": "EMR Serverless PySpark Notebook",
+        "selector": [
+          {
+            "filenamePattern": "*.sparknb"
+          },
+          {
+            "filenamePattern": "*.ipynb",
+            "priority": "default"
+          }
+        ]
+      }
+    ],
+    "notebookRenderer": [
+      {
+        "id": "emr-spark-table-renderer",
+        "displayName": "Spark DataFrame Result",
+        "entrypoint": "./dist/tableRenderer.js",
+        "mimeTypes": [
+          "application/vnd.emr-spark.table+json"
+        ],
+        "requiresMessaging": "optional"
+      }
+    ],
+    "commands": [
+      {
+        "command": "emrServerless.openNotebook",
+        "title": "Open with EMR Serverless PySpark",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.newNotebook",
+        "title": "New EMR Serverless Notebook",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.connect",
+        "title": "Connect to EMR Serverless Session",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.selectKernel",
+        "title": "Select EMR Serverless Session",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.disconnect",
+        "title": "Disconnect Notebook Session",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.selectAwsProfile",
+        "title": "Select AWS Profile",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.refreshApplications",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.startApplication",
+        "title": "Start Application",
+        "icon": "$(play)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.stopApplication",
+        "title": "Stop Application",
+        "icon": "$(debug-stop)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.restartApplication",
+        "title": "Restart Application",
+        "icon": "$(debug-restart)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.attachSession",
+        "title": "Attach to Session",
+        "icon": "$(link)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.stopSession",
+        "title": "Stop Session",
+        "icon": "$(debug-stop)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.newSession",
+        "title": "New Session",
+        "icon": "$(add)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.refreshDashboard",
+        "title": "Refresh Spark UI Link",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.openSparkUi",
+        "title": "Open Spark UI",
+        "icon": "$(globe)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.openSessionPresets",
+        "title": "Focus Session Presets",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.editSessionPreset",
+        "title": "Edit Session Preset",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.newSessionPreset",
+        "title": "New Session Preset",
+        "icon": "$(add)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.refreshSessionPresets",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.openWorkspacePresetsFile",
+        "title": "Open Workspace Presets File",
+        "icon": "$(repo)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.exportPresetsToWorkspace",
+        "title": "Export Personal Presets to Workspace",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.openWelcome",
+        "title": "Help",
+        "icon": "$(question)",
+        "category": "EMR Serverless"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "emr-serverless-explorer",
+          "title": "EMR Serverless",
+          "icon": "media/emr-serverless.svg"
+        }
+      ]
+    },
+    "views": {
+      "emr-serverless-explorer": [
+        {
+          "id": "emrServerlessApplications",
+          "name": "Applications",
+          "icon": "media/emr-serverless.svg"
+        },
+        {
+          "id": "emrServerlessSessionPresets",
+          "name": "Session Presets",
+          "icon": "$(settings-gear)"
+        }
+      ]
+    },
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "emrServerless.openNotebook",
+          "when": "resourceExtname == .ipynb",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "emrServerless.openNotebook"
+        },
+        {
+          "command": "emrServerless.newNotebook"
+        },
+        {
+          "command": "emrServerless.connect"
+        },
+        {
+          "command": "emrServerless.selectKernel"
+        },
+        {
+          "command": "emrServerless.disconnect"
+        },
+        {
+          "command": "emrServerless.refreshApplications"
+        },
+        {
+          "command": "emrServerless.openSessionPresets"
+        },
+        {
+          "command": "emrServerless.openWorkspacePresetsFile"
+        },
+        {
+          "command": "emrServerless.exportPresetsToWorkspace"
+        },
+        {
+          "command": "emrServerless.refreshDashboard"
+        },
+        {
+          "command": "emrServerless.openSparkUi"
+        },
+        {
+          "command": "emrServerless.openWelcome"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "emrServerless.openWelcome",
+          "when": "view == emrServerlessApplications",
+          "group": "navigation@99"
+        },
+        {
+          "command": "emrServerless.refreshApplications",
+          "when": "view == emrServerlessApplications",
+          "group": "navigation"
+        },
+        {
+          "command": "emrServerless.refreshSessionPresets",
+          "when": "view == emrServerlessSessionPresets",
+          "group": "navigation"
+        },
+        {
+          "command": "emrServerless.openWelcome",
+          "when": "view == emrServerlessSessionPresets",
+          "group": "navigation@99"
+        },
+        {
+          "command": "emrServerless.newSessionPreset",
+          "when": "view == emrServerlessSessionPresets",
+          "group": "navigation"
+        },
+        {
+          "command": "emrServerless.openWorkspacePresetsFile",
+          "when": "view == emrServerlessSessionPresets",
+          "group": "navigation"
+        },
+        {
+          "command": "emrServerless.openSparkUi",
+          "when": "view == emrServerlessApplications",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "emrServerless.startApplication",
+          "when": "view == emrServerlessApplications && viewItem == applicationStopped",
+          "group": "inline@1"
+        },
+        {
+          "command": "emrServerless.stopApplication",
+          "when": "view == emrServerlessApplications && viewItem == applicationRunning",
+          "group": "inline@1"
+        },
+        {
+          "command": "emrServerless.restartApplication",
+          "when": "view == emrServerlessApplications && viewItem == applicationRunning",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "emrServerless.attachSession",
+          "when": "view == emrServerlessApplications && viewItem == session",
+          "group": "inline@1"
+        },
+        {
+          "command": "emrServerless.openSparkUi",
+          "when": "view == emrServerlessApplications && viewItem == session",
+          "group": "inline@2"
+        },
+        {
+          "command": "emrServerless.stopSession",
+          "when": "view == emrServerlessApplications && viewItem == session",
+          "group": "2_destructive@1"
+        },
+        {
+          "command": "emrServerless.newSession",
+          "when": "view == emrServerlessApplications && viewItem == applicationRunning",
+          "group": "1_actions@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "EMR Serverless",
+      "properties": {
+        "emrServerless.defaultExecutionRoleArn": {
+          "type": "string",
+          "default": "",
+          "description": "IAM role passed to Livy session conf (iam:PassRole required)."
+        },
+        "emrServerless.sessionConfigsDefaults": {
+          "type": "object",
+          "default": {
+            "driverMemory": "4G",
+            "executorMemory": "16G",
+            "executorCores": 4,
+            "numExecutors": 1,
+            "conf": {
+              "emr-serverless.session.executionRoleArn": "arn:aws:iam::123456789012:role/EMRServerlessExecutionRole",
+              "spark.dynamicAllocation.enabled": "false",
+              "spark.executor.instances": "1",
+              "spark.emr-serverless.executor.disk": "40G",
+              "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+              "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+              "spark.sql.catalog.spark_catalog.type": "glue"
+            }
+          },
+          "description": "Default Livy POST /sessions body fields when starting a new session."
+        },
+        "emrServerless.statementPollIntervalMs": {
+          "type": "number",
+          "default": 500,
+          "description": "Poll interval when waiting for Livy statement completion."
+        },
+        "emrServerless.sessionStartupTimeoutSeconds": {
+          "type": "number",
+          "default": 600,
+          "description": "Timeout when waiting for a new Livy session to become ready."
+        },
+        "emrServerless.maxRows": {
+          "type": "number",
+          "default": 1000,
+          "description": "Maximum rows to display in DataFrame table outputs."
+        },
+        "emrServerless.dashboardRefreshHintMinutes": {
+          "type": "number",
+          "default": 55,
+          "description": "Hint shown before Spark UI dashboard URLs expire (~1 hour)."
+        },
+        "emrServerless.icebergCatalog.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Merge Iceberg/Glue catalog Spark conf when creating new Livy sessions."
+        },
+        "emrServerless.icebergCatalog.catalogName": {
+          "type": "string",
+          "default": "spark_catalog",
+          "description": "Primary Iceberg catalog name (SparkSessionCatalog on Glue uses spark_catalog)."
+        },
+        "emrServerless.icebergCatalog.sessionConf": {
+          "type": "object",
+          "default": {
+            "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+            "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+            "spark.sql.catalog.spark_catalog.type": "glue"
+          },
+          "description": "Primary Spark session conf merged into every new Livy session."
+        },
+        "emrServerless.icebergCatalog.additionalCatalogConf": {
+          "type": "object",
+          "default": {},
+          "description": "Extra spark.sql.catalog.* keys merged at session start (e.g. a named glue_catalog with warehouse)."
+        },
+        "emrServerless.icebergCatalog.glueCatalog": {
+          "type": "object",
+          "default": {
+            "enabled": false,
+            "name": "glue_catalog",
+            "warehouse": ""
+          },
+          "description": "Optional second Iceberg catalog (SparkCatalog + GlueCatalog). Set warehouse to s3://bucket/ and enabled true. Merged at session start alongside spark_catalog."
+        },
+        "emrServerless.sessionPresets.workspaceFile": {
+          "type": "string",
+          "default": ".vscode/emr-serverless-presets.json",
+          "description": "Path relative to the workspace folder for team-shared session presets (version-controlled)."
+        },
+        "emrServerless.sessionPresets.preferWorkspace": {
+          "type": "boolean",
+          "default": true,
+          "description": "When creating new presets, default to the workspace file when a folder is open."
+        },
+        "emrServerless.awsProfile": {
+          "type": "string",
+          "default": "",
+          "description": "AWS shared config profile for EMR Serverless API calls. Empty uses the default credential chain (AWS_PROFILE environment variable, then default)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/vscode": "^1.88.0",
+    "@types/vscode-notebook-renderer": "^1.72.4",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.25.5",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@aws-crypto/sha256-js": "^5.2.0",
+    "@aws-sdk/client-emr-serverless": "^3.821.0",
+    "@aws-sdk/credential-providers": "^3.821.0",
+    "@smithy/protocol-http": "^5.1.2",
+    "@smithy/shared-ini-file-loader": "^4.0.4",
+    "@smithy/signature-v4": "^5.5.2"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "emrServerless": {}
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# EMR Serverless PySpark\n",
+        "\n",
+        "Connect via the EMR Serverless sidebar or **Connect to EMR Serverless Session**.\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": { "language": "python" },
+      "source": ["spark.range(5).toDF(\"id\")\n"],
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": { "language": "sql" },
+      "source": ["SELECT id FROM range(5)\n"],
+      "outputs": []
+    }
+  ]
+}

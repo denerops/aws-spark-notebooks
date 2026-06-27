@@ -1,0 +1,24 @@
+node_modules/
+dist/
+*.vsix
+releases/
+.DS_Store
+
+# Local IDE / editor config (may contain machine-specific paths)
+.cursor/
+.vscode/emr-serverless-presets.json
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
+**/config.local.json
+
+# AWS local config (never commit)
+.aws/
