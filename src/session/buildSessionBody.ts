@@ -1,5 +1,4 @@
-import { getIcebergCatalogConfig } from '../aws/icebergConfig';
-import { getDefaultExecutionRoleArn, getSessionConfigDefaults } from '../aws/config';
+import { buildDefaultPreset } from './presetModel';
 import type { SessionPreset } from './presets';
 
 export function buildCreateSessionBody(
@@ -24,10 +23,7 @@ function resolveSessionName(
 }
 
 function buildFromPreset(preset: SessionPreset, sessionName?: string): Record<string, unknown> {
-  const conf = {
-    ...getIcebergCatalogConfig(),
-    ...preset.sparkConf,
-  };
+  const conf = { ...preset.sparkConf };
   if (preset.executionRoleArn) {
     conf['emr-serverless.session.executionRoleArn'] = preset.executionRoleArn;
   }
@@ -49,27 +45,5 @@ function buildFromPreset(preset: SessionPreset, sessionName?: string): Record<st
 }
 
 function buildFromSettings(sessionName?: string): Record<string, unknown> {
-  const defaults = getSessionConfigDefaults();
-  const roleArn = getDefaultExecutionRoleArn();
-  const conf = {
-    ...getIcebergCatalogConfig(),
-    ...(defaults.conf ?? {}),
-  };
-  if (roleArn) {
-    conf['emr-serverless.session.executionRoleArn'] = roleArn;
-  }
-
-  const name = sessionName?.trim();
-
-  return {
-    kind: 'pyspark',
-    ...(name ? { name } : {}),
-    driverMemory: defaults.driverMemory,
-    executorMemory: defaults.executorMemory,
-    executorCores: defaults.executorCores,
-    numExecutors: defaults.numExecutors,
-    heartbeatTimeoutInSecond: defaults.heartbeatTimeoutInSecond ?? 60,
-    ...(defaults.ttl ? { ttl: defaults.ttl } : {}),
-    conf,
-  };
+  return buildFromPreset(buildDefaultPreset(), sessionName);
 }

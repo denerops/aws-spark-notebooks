@@ -254,7 +254,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
       <li>Use <strong>+</strong> in the Session Presets toolbar to create a new preset</li>
       <li><strong>Export Personal Presets to Workspace</strong> copies local presets into the team file</li>
     </ul>
-    <p>When creating a session (sidebar or kernel picker), choose which preset to apply. Iceberg/Glue catalog settings from extension configuration are merged on top for new sessions.</p>
+    <p>When creating a session (sidebar or kernel picker), choose which preset to apply. Spark conf is taken from the preset only — edit the Default preset or create your own.</p>
   </section>
 
   <section id="notebooks">

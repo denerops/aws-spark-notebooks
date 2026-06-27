@@ -15,7 +15,7 @@ import {
 } from './workspacePresets';
 
 export type { SessionPreset, SessionPresetSource } from './presetModel';
-export { createPresetId, buildDefaultPreset, normalizePreset } from './presetModel';
+export { createPresetId, buildDefaultPreset, buildDefaultSparkConf, normalizePreset } from './presetModel';
 
 const STORAGE_KEY = 'emrServerless.sessionPresets';
 

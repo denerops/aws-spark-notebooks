@@ -71,4 +71,4 @@ export function cellConfiguresSparkCatalog(code: string): boolean {
 
 export const SPARK_CATALOG_CELL_WARNING =
   'Catalog settings in SparkSession.builder are ignored — Livy already created Spark. ' +
-  'Register catalogs in Session Presets (sparkConf) or emrServerless.icebergCatalog settings, then start a new session.';
+  'Register catalogs in Session Presets (Spark conf), then start a new session.';
