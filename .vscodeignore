@@ -2,10 +2,12 @@
 .vscode-test/**
 .git/**
 .github/**
+.cursor/**
 src/**
 scripts/**
 node_modules/**
 notebook/**
+release.config.cjs
 *.ts
 tsconfig.json
 esbuild.mjs

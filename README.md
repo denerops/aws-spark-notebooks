@@ -354,7 +354,47 @@ The script refreshes `media/icon.png` from `media/icon.svg` when `rsvg-convert` 
 - Cursor: `cursor --install-extension releases/emr-serverless-pyspark-0.1.0.vsix`
 - Or: Extensions sidebar → **⋯** → **Install from VSIX…**
 
-Bump `version` in `package.json` before packaging an update so recipients get a new build.
+For local builds, `package.json` version controls the `.vsix` filename. In CI, semantic-release bumps the version automatically on merge to `main`.
+
+### Releases (CI/CD)
+
+Releases are automated with [semantic-release](https://semantic-release.gitbook.io/) on every push to `main`.
+
+**Workflow**
+
+1. Create a feature branch from `main`.
+2. Open a PR with a [Conventional Commits](https://www.conventionalcommits.org/) **title** (squash merge uses the PR title as the commit message).
+3. CI runs typecheck, build, and a packaging smoke test.
+4. Merge to `main` — the release workflow bumps the version, updates `CHANGELOG.md`, builds a `.vsix`, and publishes a [GitHub Release](https://github.com/denerops/aws-spark-notebooks/releases).
+
+**Version bumps (from merged PR titles)**
+
+| PR title prefix | Release | Example |
+|-----------------|---------|---------|
+| `fix:` | patch | `fix(livy): retry on 503` → `0.1.0` → `0.1.1` |
+| `feat:` | minor | `feat(sidebar): session presets` → `0.1.0` → `0.2.0` |
+| `feat!:` or `BREAKING CHANGE:` | minor while on `0.x` | `feat!: drop legacy kernel API` → `0.1.0` → `0.2.0` |
+| `chore:`, `docs:`, `ci:` | none | No GitHub Release (CI still runs) |
+
+**Install from a release**
+
+Download the `.vsix` from the GitHub Release assets, then:
+
+```bash
+code --install-extension emr-serverless-pyspark-X.Y.Z.vsix
+cursor --install-extension emr-serverless-pyspark-X.Y.Z.vsix
+```
+
+**First release baseline**
+
+Tag the current `main` as `v0.1.0` before enabling automation so semantic-release treats `0.1.0` as the starting point:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+After that, only releasable merges to `main` produce new versions.
 
 ### Project layout
 

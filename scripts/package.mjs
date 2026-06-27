@@ -90,7 +90,6 @@ function main() {
     'package',
     '--out',
     vsixPath,
-    '--allow-missing-repository',
     '--no-dependencies',
   ];
   if (preRelease) {
