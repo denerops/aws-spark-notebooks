@@ -385,16 +385,9 @@ code --install-extension emr-serverless-pyspark-X.Y.Z.vsix
 cursor --install-extension emr-serverless-pyspark-X.Y.Z.vsix
 ```
 
-**First release baseline**
+**Release baseline**
 
-Tag the current `main` as `v0.1.0` before enabling automation so semantic-release treats `0.1.0` as the starting point:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-After that, only releasable merges to `main` produce new versions.
+Baseline tag `v0.1.0` is set on `main`. Only releasable merges (`feat:`, `fix:`) produce new [GitHub Releases](https://github.com/denerops/aws-spark-notebooks/releases).
 
 ### Project layout
 
