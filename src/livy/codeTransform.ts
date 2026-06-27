@@ -68,19 +68,20 @@ function isContinuationShow(line: string): boolean {
 }
 
 function stripTrailingShow(line: string): string | undefined {
-  const trimmed = line.trim();
-  const match = trimmed.match(/^(.+)\.show\s*\([^)]*\)\s*$/);
+  const { expr } = splitTrailingComment(line.trim());
+  const match = expr.match(/^(.+)\.show\s*\([^)]*\)\s*$/);
   return match?.[1].trim();
 }
 
 function parseShowLimit(line: string): number | undefined {
-  const match = line.trim().match(/\.show\s*\(\s*(\d+)/);
+  const { expr } = splitTrailingComment(line.trim());
+  const match = expr.match(/\.show\s*\(\s*(\d+)/);
   return match ? Number(match[1]) : undefined;
 }
 
 function flattenStatementExpr(lines: string[], indices: number[]): string {
   return indices
-    .map((i) => lines[i].trim())
+    .map((i) => splitTrailingComment(lines[i].trim()).expr)
     .join(' ')
     .replace(/\s+/g, ' ');
 }
@@ -89,9 +90,71 @@ function pythonTripleQuotedString(value: string): string {
   return `"""${value.replace(/\\/g, '\\\\').replace(/"""/g, '\\"\\"\\"')}"""`;
 }
 
+/** Split a Python line into code and a trailing `#` comment (respecting string literals). */
+function splitTrailingComment(line: string): { expr: string; commentSuffix: string } {
+  let i = 0;
+  let stringQuote: "'" | '"' | null = null;
+  let tripleQuote: "'''" | '"""' | null = null;
+
+  while (i < line.length) {
+    if (tripleQuote) {
+      if (line.startsWith(tripleQuote, i)) {
+        tripleQuote = null;
+        i += 3;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
+
+    if (stringQuote) {
+      const ch = line[i];
+      if (ch === '\\') {
+        i += 2;
+        continue;
+      }
+      if (ch === stringQuote) {
+        stringQuote = null;
+      }
+      i += 1;
+      continue;
+    }
+
+    if (line.startsWith("'''", i) || line.startsWith('"""', i)) {
+      tripleQuote = line.startsWith("'''", i) ? "'''" : '"""';
+      i += 3;
+      continue;
+    }
+
+    const ch = line[i];
+    if (ch === "'" || ch === '"') {
+      stringQuote = ch;
+      i += 1;
+      continue;
+    }
+
+    if (ch === '#') {
+      return {
+        expr: line.slice(0, i).trimEnd(),
+        commentSuffix: line.slice(i),
+      };
+    }
+
+    i += 1;
+  }
+
+  return { expr: line.trimEnd(), commentSuffix: '' };
+}
+
 function emrShowCall(dataExpr: string, countExpr: string, limit?: number): string {
   const limitArg = limit !== undefined ? `, limit=${limit}` : '';
   return `emr_show(${dataExpr}${limitArg}, _count_expr=${pythonTripleQuotedString(countExpr)})`;
+}
+
+function wrapLineWithEmrShow(line: string, limit?: number): string {
+  const indent = line.match(/^(\s*)/)?.[1] ?? '';
+  const { expr, commentSuffix } = splitTrailingComment(line.trimEnd());
+  return `${indent}${emrShowCall(expr, expr, limit)}${commentSuffix}`;
 }
 
 function rewriteShowCall(lines: string[], lastIndex: number): string | undefined {
@@ -105,12 +168,14 @@ function rewriteShowCall(lines: string[], lastIndex: number): string | undefined
     }
     const withoutShow = statementLines.slice(0, -1);
     const expr = flattenStatementExpr(lines, withoutShow);
+    const lastStmtLine = lines[withoutShow[withoutShow.length - 1]];
+    const { commentSuffix } = splitTrailingComment(lastStmtLine.trimEnd());
     const indent = lines[withoutShow[0]].match(/^(\s*)/)?.[1] ?? '';
     const next = [...lines];
     next.splice(
       statementLines[0],
       statementLines.length,
-      `${indent}${emrShowCall(expr, expr, limit)}`
+      `${indent}${emrShowCall(expr, expr, limit)}${commentSuffix}`
     );
     return next.join('\n');
   }
@@ -120,8 +185,7 @@ function rewriteShowCall(lines: string[], lastIndex: number): string | undefined
     return undefined;
   }
 
-  const indent = lastLine.match(/^(\s*)/)?.[1] ?? '';
-  lines[lastIndex] = `${indent}${emrShowCall(expr, expr, limit)}`;
+  lines[lastIndex] = wrapLineWithEmrShow(lastLine, limit);
   return lines.join('\n');
 }
 
@@ -168,8 +232,7 @@ export function wrapLastExpressionForDisplay(code: string): string {
     return code;
   }
 
-  const indent = lines[lastIndex].match(/^(\s*)/)?.[1] ?? '';
-  lines[lastIndex] = `${indent}${emrShowCall(lastLine, lastLine)}`;
+  lines[lastIndex] = wrapLineWithEmrShow(lines[lastIndex]);
   return lines.join('\n');
 }
 
