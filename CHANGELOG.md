@@ -1,3 +1,9 @@
+## [0.3.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.2.0...v0.3.0) (2026-06-28)
+
+### Features
+
+* enhance session presets UI with webview design system ([bf481a9](https://github.com/denerops/aws-spark-notebooks/commit/bf481a9e7d190c7550fbb0c5cd3fa5a42318a98b))
+
 ## [0.2.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.1.1...v0.2.0) (2026-06-28)
 
 ### Features
