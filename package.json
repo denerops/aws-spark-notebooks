@@ -2,7 +2,7 @@
   "name": "emr-serverless-pyspark",
   "displayName": "EMR Serverless PySpark",
   "description": "Run PySpark and Spark SQL in .sparknb and .ipynb notebooks on EMR Serverless via Apache Livy",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "emr-serverless",
   "license": "MIT",
   "repository": {

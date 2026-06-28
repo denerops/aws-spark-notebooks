@@ -1,3 +1,18 @@
+## [0.2.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.1.1...v0.2.0) (2026-06-28)
+
+### Features
+
+* add error handling and UI enhancements for error outputs ([af11216](https://github.com/denerops/aws-spark-notebooks/commit/af11216c7ead55055334e56474c8a4eaa29c3afb))
+* add GitHub Actions workflow for automatic pull request creation ([e499202](https://github.com/denerops/aws-spark-notebooks/commit/e499202c8415321d7ece7cd503275eca5876e252))
+* enhance Python code transformation with string handling improvements ([4bbe259](https://github.com/denerops/aws-spark-notebooks/commit/4bbe259639568320057b311ce60f9cf602717a49))
+* enhance session presets with Python package support and Spark configuration suggestions ([5eed343](https://github.com/denerops/aws-spark-notebooks/commit/5eed343c18ad9def0c8ee935b74dfba32825af7e))
+* enhance session presets with Spark package support ([2131b55](https://github.com/denerops/aws-spark-notebooks/commit/2131b557b4500fb8a2e589bba98688e303877b70))
+* update GitHub Actions workflow for pull request creation ([d0b4495](https://github.com/denerops/aws-spark-notebooks/commit/d0b4495a568bc28cf2161c3226b72b923530e28d))
+
+### Bug Fixes
+
+* update cell execution logic to handle failures gracefully ([f8a4acf](https://github.com/denerops/aws-spark-notebooks/commit/f8a4acf2e48205a0fd6e22dd79c4df934f14fec8))
+
 ## [0.1.1](https://github.com/denerops/aws-spark-notebooks/compare/v0.1.0...v0.1.1) (2026-06-27)
 
 ### Bug Fixes
