@@ -5,6 +5,84 @@ function indentOf(line: string): number {
   return line.match(/^(\s*)/)?.[1].length ?? 0;
 }
 
+type PythonScanState = {
+  stringQuote: "'" | '"' | null;
+  tripleQuote: "'''" | '"""' | null;
+};
+
+function advancePythonScan(line: string, i: number, state: PythonScanState): number {
+  if (state.tripleQuote) {
+    if (line.startsWith(state.tripleQuote, i)) {
+      state.tripleQuote = null;
+      return i + 3;
+    }
+    return i + 1;
+  }
+
+  if (state.stringQuote) {
+    const ch = line[i];
+    if (ch === '\\') {
+      return i + 2;
+    }
+    if (ch === state.stringQuote) {
+      state.stringQuote = null;
+    }
+    return i + 1;
+  }
+
+  if (line.startsWith("'''", i) || line.startsWith('"""', i)) {
+    state.tripleQuote = line.startsWith("'''", i) ? "'''" : '"""';
+    return i + 3;
+  }
+
+  const ch = line[i];
+  if (ch === "'" || ch === '"') {
+    state.stringQuote = ch;
+    return i + 1;
+  }
+
+  return i + 1;
+}
+
+function isOutsidePythonStrings(line: string, index: number): boolean {
+  const state: PythonScanState = { stringQuote: null, tripleQuote: null };
+  for (let i = 0; i < index; ) {
+    i = advancePythonScan(line, i, state);
+  }
+  return !state.stringQuote && !state.tripleQuote;
+}
+
+function lineHasBackslashContinuation(line: string): boolean {
+  const { expr } = splitTrailingComment(line);
+  let end = expr.length;
+  while (end > 0 && /\s/.test(expr[end - 1])) {
+    end--;
+  }
+  if (end === 0 || expr[end - 1] !== '\\') {
+    return false;
+  }
+  return isOutsidePythonStrings(expr, end - 1);
+}
+
+function stripLineContinuationBackslash(expr: string): string {
+  let end = expr.length;
+  while (end > 0 && /\s/.test(expr[end - 1])) {
+    end--;
+  }
+  if (end === 0 || expr[end - 1] !== '\\') {
+    return expr.trimEnd();
+  }
+  if (!isOutsidePythonStrings(expr, end - 1)) {
+    return expr.trimEnd();
+  }
+  return expr.slice(0, end - 1).trimEnd();
+}
+
+function lineExprForFlatten(line: string): string {
+  const { expr } = splitTrailingComment(line.trim());
+  return stripLineContinuationBackslash(expr);
+}
+
 function isContinuationLine(line: string): boolean {
   const trimmed = line.trim();
   return (
@@ -34,7 +112,10 @@ function statementLineIndices(lines: string[], lastIndex: number): number[] {
     }
     const ind = indentOf(lines[i]);
     if (i < lastIndex && ind < lastIndent) {
-      break;
+      const nextLine = lines[i + 1]?.trim() ?? '';
+      if (!lineHasBackslashContinuation(lines[i]) && !isContinuationLine(nextLine)) {
+        break;
+      }
     }
     indices.unshift(i);
   }
@@ -68,61 +149,193 @@ function isContinuationShow(line: string): boolean {
 }
 
 function stripTrailingShow(line: string): string | undefined {
-  const trimmed = line.trim();
-  const match = trimmed.match(/^(.+)\.show\s*\([^)]*\)\s*$/);
+  const { expr } = splitTrailingComment(line.trim());
+  const match = expr.match(/^(.+)\.show\s*\([^)]*\)\s*$/);
   return match?.[1].trim();
 }
 
 function parseShowLimit(line: string): number | undefined {
-  const match = line.trim().match(/\.show\s*\(\s*(\d+)/);
+  const { expr } = splitTrailingComment(line.trim());
+  const match = expr.match(/\.show\s*\(\s*(\d+)/);
   return match ? Number(match[1]) : undefined;
 }
 
 function flattenStatementExpr(lines: string[], indices: number[]): string {
   return indices
-    .map((i) => lines[i].trim())
+    .map((i) => lineExprForFlatten(lines[i]))
     .join(' ')
     .replace(/\s+/g, ' ');
 }
 
-function pythonTripleQuotedString(value: string): string {
-  return `"""${value.replace(/\\/g, '\\\\').replace(/"""/g, '\\"\\"\\"')}"""`;
+function replaceStatementWithEmrShow(
+  lines: string[],
+  statementLines: number[],
+  dataExpr: string,
+  limit?: number
+): string {
+  const lastStmtLine = lines[statementLines[statementLines.length - 1]];
+  const { commentSuffix } = splitTrailingComment(lastStmtLine.trimEnd());
+  const indent = lines[statementLines[0]].match(/^(\s*)/)?.[1] ?? '';
+  const next = [...lines];
+  next.splice(
+    statementLines[0],
+    statementLines.length,
+    `${indent}${emrShowCall(dataExpr, dataExpr, limit)}${commentSuffix}`
+  );
+  return next.join('\n');
+}
+
+function shouldSkipAutoDisplayLine(lastLine: string): boolean {
+  return (
+    lastLine.startsWith('emr_display(') ||
+    lastLine.startsWith('emr_show(') ||
+    lastLine.startsWith('__emr_run_pip(') ||
+    lastLine.startsWith('print(')
+  );
+}
+
+function tryWrapStatementExpression(lines: string[], lastIndex: number): string | undefined {
+  const statementLines = statementLineIndices(lines, lastIndex);
+  if (statementLines.length < 2) {
+    return undefined;
+  }
+  if (statementLines.some((i) => lineHasAssignment(lines[i]))) {
+    return undefined;
+  }
+
+  const lastLine = splitTrailingComment(lines[lastIndex].trim()).expr;
+  if (!EXPRESSION_LINE.test(lastLine) || lastLine.includes('=')) {
+    return undefined;
+  }
+  if (shouldSkipAutoDisplayLine(lastLine.trim())) {
+    return undefined;
+  }
+
+  const fullExpr = flattenStatementExpr(lines, statementLines);
+  if (fullExpr.includes('=')) {
+    return undefined;
+  }
+
+  return replaceStatementWithEmrShow(lines, statementLines, fullExpr);
+}
+
+/** Encode arbitrary text as a valid Python string literal for embedding in generated code. */
+function pythonStringLiteral(value: string): string {
+  const escaped = value.replace(/\\/g, '\\\\');
+  if (/[\r\n]/.test(value)) {
+    if (!value.includes("'''")) {
+      return `'''${escaped}'''`;
+    }
+    if (!value.includes('"""')) {
+      return `"""${escaped}"""`;
+    }
+    return `"${escaped.replace(/"/g, '\\"')}"`;
+  }
+  if (!value.includes("'")) {
+    return `'${escaped}'`;
+  }
+  if (!value.includes('"')) {
+    return `"${escaped}"`;
+  }
+  if (!value.includes("'''")) {
+    return `'''${escaped}'''`;
+  }
+  if (!value.includes('"""')) {
+    return `"""${escaped}"""`;
+  }
+  return `"${escaped.replace(/"/g, '\\"')}"`;
+}
+
+/** Split a Python line into code and a trailing `#` comment (respecting string literals). */
+export function splitTrailingComment(line: string): { expr: string; commentSuffix: string } {
+  let i = 0;
+  let stringQuote: "'" | '"' | null = null;
+  let tripleQuote: "'''" | '"""' | null = null;
+
+  while (i < line.length) {
+    if (tripleQuote) {
+      if (line.startsWith(tripleQuote, i)) {
+        tripleQuote = null;
+        i += 3;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
+
+    if (stringQuote) {
+      const ch = line[i];
+      if (ch === '\\') {
+        i += 2;
+        continue;
+      }
+      if (ch === stringQuote) {
+        stringQuote = null;
+      }
+      i += 1;
+      continue;
+    }
+
+    if (line.startsWith("'''", i) || line.startsWith('"""', i)) {
+      tripleQuote = line.startsWith("'''", i) ? "'''" : '"""';
+      i += 3;
+      continue;
+    }
+
+    const ch = line[i];
+    if (ch === "'" || ch === '"') {
+      stringQuote = ch;
+      i += 1;
+      continue;
+    }
+
+    if (ch === '#') {
+      return {
+        expr: line.slice(0, i).trimEnd(),
+        commentSuffix: line.slice(i),
+      };
+    }
+
+    i += 1;
+  }
+
+  return { expr: line.trimEnd(), commentSuffix: '' };
 }
 
 function emrShowCall(dataExpr: string, countExpr: string, limit?: number): string {
   const limitArg = limit !== undefined ? `, limit=${limit}` : '';
-  return `emr_show(${dataExpr}${limitArg}, _count_expr=${pythonTripleQuotedString(countExpr)})`;
+  return `emr_show(${dataExpr}${limitArg}, _count_expr=${pythonStringLiteral(countExpr)})`;
+}
+
+function wrapLineWithEmrShow(line: string, limit?: number): string {
+  const indent = line.match(/^(\s*)/)?.[1] ?? '';
+  const { expr, commentSuffix } = splitTrailingComment(line.trimEnd());
+  return `${indent}${emrShowCall(expr, expr, limit)}${commentSuffix}`;
 }
 
 function rewriteShowCall(lines: string[], lastIndex: number): string | undefined {
   const lastLine = lines[lastIndex];
   const limit = parseShowLimit(lastLine);
+  const continuationShow = isContinuationShow(lastLine);
+  const inlineShow = stripTrailingShow(lastLine.trim());
 
-  if (isContinuationShow(lastLine)) {
-    const statementLines = statementLineIndices(lines, lastIndex);
-    if (statementLines.length < 2) {
-      return undefined;
-    }
-    const withoutShow = statementLines.slice(0, -1);
-    const expr = flattenStatementExpr(lines, withoutShow);
-    const indent = lines[withoutShow[0]].match(/^(\s*)/)?.[1] ?? '';
-    const next = [...lines];
-    next.splice(
-      statementLines[0],
-      statementLines.length,
-      `${indent}${emrShowCall(expr, expr, limit)}`
-    );
-    return next.join('\n');
-  }
-
-  const expr = stripTrailingShow(lastLine.trim());
-  if (!expr) {
+  if (!continuationShow && !inlineShow) {
     return undefined;
   }
 
-  const indent = lastLine.match(/^(\s*)/)?.[1] ?? '';
-  lines[lastIndex] = `${indent}${emrShowCall(expr, expr, limit)}`;
-  return lines.join('\n');
+  const statementLines = statementLineIndices(lines, lastIndex);
+  if (continuationShow && statementLines.length < 2) {
+    return undefined;
+  }
+
+  let fullExpr: string;
+  if (continuationShow) {
+    fullExpr = flattenStatementExpr(lines, statementLines.slice(0, -1));
+  } else {
+    fullExpr = stripTrailingShow(flattenStatementExpr(lines, statementLines)) ?? inlineShow!;
+  }
+
+  return replaceStatementWithEmrShow(lines, statementLines, fullExpr, limit);
 }
 
 export function wrapLastExpressionForDisplay(code: string): string {
@@ -165,11 +378,10 @@ export function wrapLastExpressionForDisplay(code: string): string {
   }
 
   if (shouldSkipAutoDisplay(lines, lastIndex)) {
-    return code;
+    return tryWrapStatementExpression(lines, lastIndex) ?? code;
   }
 
-  const indent = lines[lastIndex].match(/^(\s*)/)?.[1] ?? '';
-  lines[lastIndex] = `${indent}${emrShowCall(lastLine, lastLine)}`;
+  lines[lastIndex] = wrapLineWithEmrShow(lines[lastIndex]);
   return lines.join('\n');
 }
 

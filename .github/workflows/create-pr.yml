@@ -1,0 +1,74 @@
+# Requires one of:
+# 1. Repo Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"
+# 2. A GH_PAT repository secret (classic PAT or fine-grained with pull requests: write)
+name: Create PR
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+concurrency:
+  group: create-pr-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  create-pull-request:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create pull request
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+          PR_BODY: |
+            ## Summary
+            Auto-created from branch `${{ github.ref_name }}`.
+
+            ## Test plan
+            - [ ] CI passes
+        run: |
+          set -euo pipefail
+
+          if [ -n "${GH_PAT}" ]; then
+            export GH_TOKEN="${GH_PAT}"
+          else
+            export GH_TOKEN="${GITHUB_TOKEN}"
+          fi
+
+          if gh pr view --json number >/dev/null 2>&1; then
+            echo "Pull request already exists for ${BRANCH}"
+            exit 0
+          fi
+
+          commit_subject="$(git log -1 --pretty=%s)"
+          conventional='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9_.-]+\))?!?: .+'
+
+          if echo "$commit_subject" | grep -Eq "$conventional"; then
+            title="$commit_subject"
+          elif echo "$BRANCH" | grep -q '/'; then
+            type="$(echo "$BRANCH" | cut -d/ -f1)"
+            slug="$(echo "$BRANCH" | cut -d/ -f2- | tr '/_' ' ' | tr '-' ' ')"
+            case "$type" in
+              feature) type=feat ;;
+            esac
+            title="${type}: ${slug}"
+          else
+            title="chore: ${BRANCH//-/ }"
+          fi
+
+          if ! gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "$title" \
+            --body "$PR_BODY"; then
+            echo "::error::Pull request creation failed. Enable 'Allow GitHub Actions to create and approve pull requests' under Settings → Actions → General, or add a GH_PAT repository secret with pull-request write access."
+            exit 1
+          fi

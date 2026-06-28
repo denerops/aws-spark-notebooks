@@ -8,6 +8,13 @@ import {
 } from '../output/tableModel';
 import { styleForInferredKind } from '../output/columnTypeStyle';
 
+const ERROR_MIME = 'application/vnd.emr-spark.error+json';
+
+interface ErrorPayload {
+  message: string;
+  executionTimeMs?: number;
+}
+
 type SortDir = 'asc' | 'desc' | null;
 
 interface CountResultMessage {
@@ -108,6 +115,91 @@ function applyPayloadToView(state: OutputViewState): void {
   }
 }
 
+const COPY_ICON_SVG =
+  '<svg class="duckdb-error-copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+
+const CHECK_ICON_SVG =
+  '<svg class="duckdb-error-copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
+function setCopyButtonIcon(button: HTMLButtonElement, icon: 'copy' | 'check'): void {
+  button.innerHTML = icon === 'copy' ? COPY_ICON_SVG : CHECK_ICON_SVG;
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function renderErrorOutput(outputItem: { id: string; json(): unknown }, element: HTMLElement): void {
+  const payload = outputItem.json() as ErrorPayload;
+  ensureRendererStyles(element);
+
+  const existingRoot = element.querySelector(':scope > .duckdb-root');
+  if (existingRoot) {
+    existingRoot.remove();
+  }
+
+  const root = document.createElement('div');
+  root.className = 'duckdb-root duckdb-table-output';
+  element.append(root);
+
+  const card = document.createElement('div');
+  card.className = 'duckdb-error-card';
+
+  const header = document.createElement('div');
+  header.className = 'duckdb-error-header';
+
+  const icon = document.createElement('span');
+  icon.className = 'duckdb-error-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = '!';
+
+  const title = document.createElement('span');
+  title.className = 'duckdb-error-title';
+  title.textContent = 'Execution failed';
+
+  const copyButton = document.createElement('button');
+  copyButton.type = 'button';
+  copyButton.className = 'duckdb-error-copy-btn';
+  copyButton.title = 'Copy error to clipboard';
+  copyButton.setAttribute('aria-label', 'Copy error to clipboard');
+  setCopyButtonIcon(copyButton, 'copy');
+  copyButton.addEventListener('click', () => {
+    void (async () => {
+      copyButton.disabled = true;
+      const copied = await copyTextToClipboard(payload.message);
+      setCopyButtonIcon(copyButton, copied ? 'check' : 'copy');
+      copyButton.title = copied ? 'Copied!' : 'Copy failed';
+      window.setTimeout(() => {
+        setCopyButtonIcon(copyButton, 'copy');
+        copyButton.title = 'Copy error to clipboard';
+        copyButton.disabled = false;
+      }, 1500);
+    })();
+  });
+
+  header.append(icon, title, copyButton);
+
+  const message = document.createElement('div');
+  message.className = 'duckdb-error-message';
+  message.textContent = payload.message;
+
+  card.append(header, message);
+
+  if (payload.executionTimeMs !== undefined) {
+    const timing = document.createElement('div');
+    timing.className = 'duckdb-error-footer';
+    timing.textContent = `${payload.executionTimeMs} ms`;
+    card.append(timing);
+  }
+
+  root.append(card);
+}
+
 export const activate: ActivationFunction = (context) => {
   context.onDidReceiveMessage?.((message: CountResultMessage) => {
     if (message?.type !== 'countResult' || !message.outputItemId) {
@@ -148,6 +240,11 @@ export const activate: ActivationFunction = (context) => {
     },
 
     renderOutputItem(outputItem, element) {
+      if (outputItem.mime === ERROR_MIME) {
+        renderErrorOutput(outputItem, element);
+        return;
+      }
+
       const payload = outputItem.json() as QueryResultPayload;
       ensureRendererStyles(element);
 

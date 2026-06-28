@@ -8,8 +8,8 @@ import {
   toSourceArray,
 } from './types';
 import { sanitizeErrorMessage } from '../output/errorMessage';
-import { buildErrorHtml } from '../output/htmlError';
 import type { ErrorPayload } from '../output/errorMapper';
+import { ERROR_MIME } from '../output/errorMapper';
 import { parseSparknbContent } from './defaultDocument';
 import {
   cellMetadataForSave,
@@ -32,9 +32,9 @@ function uriKey(uri: vscode.Uri): string {
 function outputToNotebook(output: SparknbOutput): vscode.NotebookCellOutput | undefined {
   if (output.output_type === 'error') {
     const message = sanitizeErrorMessage(output.evalue ?? 'Unknown error');
-    const html = buildErrorHtml(message);
+    const payload: ErrorPayload = { message };
     return new vscode.NotebookCellOutput([
-      vscode.NotebookCellOutputItem.text(html, 'text/html'),
+      vscode.NotebookCellOutputItem.json(payload, ERROR_MIME),
       vscode.NotebookCellOutputItem.text(message, 'text/plain'),
     ]);
   }

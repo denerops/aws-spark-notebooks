@@ -39,7 +39,10 @@ export class SparknbController implements vscode.Disposable {
     controller: vscode.NotebookController
   ): Promise<void> {
     for (const cell of cells) {
-      await this.executeCell(cell, notebook, controller);
+      const succeeded = await this.executeCell(cell, notebook, controller);
+      if (!succeeded) {
+        break;
+      }
     }
   }
 
@@ -64,15 +67,15 @@ export class SparknbController implements vscode.Disposable {
     cell: vscode.NotebookCell,
     notebook: vscode.NotebookDocument,
     controller: vscode.NotebookController
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (cell.kind !== vscode.NotebookCellKind.Code) {
-      return;
+      return true;
     }
 
     const lang = cell.document.languageId;
     const prepared = prepareCellCode(cell.document.getText(), lang);
     if (prepared.language !== 'python' && prepared.language !== 'sql') {
-      return;
+      return true;
     }
 
     const code = prepared.code;
@@ -84,7 +87,7 @@ export class SparknbController implements vscode.Disposable {
       execution.start(Date.now());
       execution.replaceOutput([]);
       execution.end(true, Date.now());
-      return;
+      return true;
     }
 
     const startedAt = Date.now();
@@ -165,6 +168,7 @@ export class SparknbController implements vscode.Disposable {
 
       execution.replaceOutput(outputs);
       execution.end(true, Date.now());
+      return true;
     } catch (error) {
       if (abortController.signal.aborted) {
         execution.replaceOutput(mapCancelledOutput());
@@ -174,6 +178,7 @@ export class SparknbController implements vscode.Disposable {
         execution.replaceOutput(mapErrorToOutputs(error, executionTimeMs));
         execution.end(false, Date.now());
       }
+      return false;
     } finally {
       cancellationListener.dispose();
     }

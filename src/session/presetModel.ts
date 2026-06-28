@@ -1,4 +1,7 @@
 import { getDefaultExecutionRoleArn, getSessionConfigDefaults } from '../aws/config';
+import { getIcebergCatalogConfig } from '../aws/icebergConfig';
+import { normalizePythonPackages } from './pythonPackages';
+import { normalizeSparkPackages } from './sparkPackages';
 
 export interface SessionPreset {
   id: string;
@@ -13,8 +16,12 @@ export interface SessionPreset {
   driverCores?: number;
   heartbeatTimeoutInSecond?: number;
   ttl?: string;
-  /** Additional Spark / Livy conf entries (excluding execution role). */
+  /** Spark / Livy conf entries (excluding execution role). */
   sparkConf: Record<string, string>;
+  /** PyPI package specs installed with pip when the session starts. */
+  pythonPackages?: string[];
+  /** Maven coordinates resolved into spark.jars.packages when the session starts. */
+  sparkPackages?: string[];
   /** Set when listing presets; not persisted to storage. */
   source?: SessionPresetSource;
 }
@@ -41,6 +48,20 @@ export function normalizePreset(preset: SessionPreset, index = 0): SessionPreset
     ttl: preset.ttl,
     livySessionName: preset.livySessionName?.trim() || undefined,
     sparkConf: { ...(preset.sparkConf ?? {}) },
+    pythonPackages: normalizePythonPackages(preset.pythonPackages),
+    sparkPackages: normalizeSparkPackages(preset.sparkPackages),
+  };
+}
+
+/** Spark conf seeded into new presets and the built-in Default preset. */
+export function buildDefaultSparkConf(): Record<string, string> {
+  const defaults = getSessionConfigDefaults();
+  const fromSettings = { ...(defaults.conf ?? {}) };
+  delete fromSettings['emr-serverless.session.executionRoleArn'];
+
+  return {
+    ...getIcebergCatalogConfig(),
+    ...fromSettings,
   };
 }
 
@@ -50,9 +71,6 @@ export function buildDefaultPreset(): SessionPreset {
     getDefaultExecutionRoleArn() ||
     defaults.conf?.['emr-serverless.session.executionRoleArn'] ||
     '';
-
-  const sparkConf = { ...(defaults.conf ?? {}) };
-  delete sparkConf['emr-serverless.session.executionRoleArn'];
 
   return {
     id: DEFAULT_PRESET_ID,
@@ -64,7 +82,9 @@ export function buildDefaultPreset(): SessionPreset {
     numExecutors: defaults.numExecutors ?? 1,
     heartbeatTimeoutInSecond: defaults.heartbeatTimeoutInSecond ?? 60,
     ttl: defaults.ttl,
-    sparkConf,
+    sparkConf: buildDefaultSparkConf(),
+    pythonPackages: [],
+    sparkPackages: [],
   };
 }
 

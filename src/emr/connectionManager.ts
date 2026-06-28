@@ -3,6 +3,7 @@ import { getEmrServerlessService } from '../aws/emrServerlessClient';
 import { buildCreateSessionBody } from '../session/buildSessionBody';
 import type { SessionPreset } from '../session/presets';
 import { getDefaultRegion } from '../aws/credentials';
+import { installPresetPythonPackages } from '../livy/installPythonPackages';
 import { LivySession } from '../livy/session';
 import type { SparkNotebookMetadata } from '../notebook/types';
 import { isEmrSparkNotebook } from '../notebook/types';
@@ -179,6 +180,7 @@ export class ConnectionManager {
     const region = await getDefaultRegion();
     const body = buildCreateSessionBody(preset, { sessionName });
     const session = await LivySession.create(applicationId, region, body);
+    await installPresetPythonPackages(session, preset?.pythonPackages);
     await this.refreshDashboard(session);
     return session;
   }

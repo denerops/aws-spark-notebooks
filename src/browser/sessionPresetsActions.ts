@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { createPresetId } from '../session/presets';
+import { createPresetId, buildDefaultPreset } from '../session/presets';
 import type { SessionPresetStore } from '../session/presets';
 import {
   PresetsTreeItem,
@@ -52,16 +52,11 @@ export function registerSessionPresetsActions(
       }
 
       const presets = await store.list();
+      const defaults = buildDefaultPreset();
       const preset = {
+        ...defaults,
         id: createPresetId(),
         name: `Preset ${presets.length + 1}`,
-        executionRoleArn: '',
-        driverMemory: '4G',
-        executorMemory: '16G',
-        executorCores: 4,
-        numExecutors: 1,
-        heartbeatTimeoutInSecond: 60,
-        sparkConf: {},
         source,
       };
       await store.save(preset, source);
