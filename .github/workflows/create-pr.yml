@@ -1,3 +1,6 @@
+# Requires one of:
+# 1. Repo Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"
+# 2. A GH_PAT repository secret (classic PAT or fine-grained with pull requests: write)
 name: Create PR
 
 on:
@@ -22,7 +25,8 @@ jobs:
 
       - name: Create pull request
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ github.ref_name }}
           PR_BODY: |
             ## Summary
@@ -32,6 +36,12 @@ jobs:
             - [ ] CI passes
         run: |
           set -euo pipefail
+
+          if [ -n "${GH_PAT}" ]; then
+            export GH_TOKEN="${GH_PAT}"
+          else
+            export GH_TOKEN="${GITHUB_TOKEN}"
+          fi
 
           if gh pr view --json number >/dev/null 2>&1; then
             echo "Pull request already exists for ${BRANCH}"
@@ -54,8 +64,11 @@ jobs:
             title="chore: ${BRANCH//-/ }"
           fi
 
-          gh pr create \
+          if ! gh pr create \
             --base main \
             --head "$BRANCH" \
             --title "$title" \
-            --body "$PR_BODY"
+            --body "$PR_BODY"; then
+            echo "::error::Pull request creation failed. Enable 'Allow GitHub Actions to create and approve pull requests' under Settings → Actions → General, or add a GH_PAT repository secret with pull-request write access."
+            exit 1
+          fi
