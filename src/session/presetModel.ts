@@ -1,6 +1,7 @@
 import { getDefaultExecutionRoleArn, getSessionConfigDefaults } from '../aws/config';
 import { getIcebergCatalogConfig } from '../aws/icebergConfig';
 import { normalizePythonPackages } from './pythonPackages';
+import { normalizeSparkPackages } from './sparkPackages';
 
 export interface SessionPreset {
   id: string;
@@ -19,6 +20,8 @@ export interface SessionPreset {
   sparkConf: Record<string, string>;
   /** PyPI package specs installed with pip when the session starts. */
   pythonPackages?: string[];
+  /** Maven coordinates resolved into spark.jars.packages when the session starts. */
+  sparkPackages?: string[];
   /** Set when listing presets; not persisted to storage. */
   source?: SessionPresetSource;
 }
@@ -46,6 +49,7 @@ export function normalizePreset(preset: SessionPreset, index = 0): SessionPreset
     livySessionName: preset.livySessionName?.trim() || undefined,
     sparkConf: { ...(preset.sparkConf ?? {}) },
     pythonPackages: normalizePythonPackages(preset.pythonPackages),
+    sparkPackages: normalizeSparkPackages(preset.sparkPackages),
   };
 }
 
@@ -80,6 +84,7 @@ export function buildDefaultPreset(): SessionPreset {
     ttl: defaults.ttl,
     sparkConf: buildDefaultSparkConf(),
     pythonPackages: [],
+    sparkPackages: [],
   };
 }
 

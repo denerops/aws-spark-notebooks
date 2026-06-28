@@ -104,6 +104,16 @@ export const SPARK_CONF_SUGGESTIONS: SparkConfSuggestion[] = [
     description: 'Python venv archive for executors (#environment)',
   },
   {
+    key: 'spark.jars.packages',
+    value: 'org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.0',
+    description: 'Maven coordinates for Spark packages (comma-separated)',
+  },
+  {
+    key: 'spark.jars.repositories',
+    value: 'https://repo1.maven.org/maven2',
+    description: 'Extra Maven repositories for spark.jars.packages',
+  },
+  {
     key: 'spark.pyspark.python',
     value: './environment/bin/python',
     description: 'Python interpreter from spark.archives venv',

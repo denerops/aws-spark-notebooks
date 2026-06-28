@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { SessionPreset, SessionPresetStore } from '../session/presets';
 import { getSparkConfSuggestionsForEditor } from '../session/sparkConfSuggestions';
 import { assertValidPythonPackageSpecs, normalizePythonPackages } from '../session/pythonPackages';
+import { assertValidSparkPackageSpecs, normalizeSparkPackages } from '../session/sparkPackages';
 
 export type PresetPanelMessage =
   | { type: 'save'; preset: SessionPreset }
@@ -48,7 +49,16 @@ export class SessionPresetsController {
         const source = existing?.source ?? preset.source;
         const normalizedPackages = normalizePythonPackages(preset.pythonPackages);
         assertValidPythonPackageSpecs(normalizedPackages);
-        await this.store.save({ ...preset, pythonPackages: normalizedPackages }, source);
+        const normalizedSparkPackages = normalizeSparkPackages(preset.sparkPackages);
+        assertValidSparkPackageSpecs(normalizedSparkPackages);
+        await this.store.save(
+          {
+            ...preset,
+            pythonPackages: normalizedPackages,
+            sparkPackages: normalizedSparkPackages,
+          },
+          source
+        );
         this.selectedId = preset.id;
         this.options.onMutated?.();
         const scopeLabel = source === 'workspace' ? 'workspace' : 'personal';
@@ -318,19 +328,29 @@ export function renderSessionPresetEditorHtml(preset: SessionPreset | undefined)
     </div>
 
     <div class="section">
-      <h2>Cluster sizing</h2>
+      <h2>Driver</h2>
       <div class="grid">
-        <label>Driver memory <input id="driverMemory" type="text" placeholder="4G" /></label>
-        <label>Executor memory <input id="executorMemory" type="text" placeholder="16G" /></label>
-        <label>Executor cores <input id="executorCores" type="number" min="1" step="1" /></label>
-        <label>Number of executors <input id="numExecutors" type="number" min="1" step="1" /></label>
-        <label>Driver cores (optional) <input id="driverCores" type="number" min="1" step="1" /></label>
-        <label>Heartbeat timeout (sec) <input id="heartbeatTimeoutInSecond" type="number" min="30" step="1" /></label>
+        <label>Memory <input id="driverMemory" type="text" placeholder="4G" /></label>
+        <label>Cores (optional) <input id="driverCores" type="number" min="1" step="1" /></label>
       </div>
-      <label style="margin-top:12px">
-        Session TTL (optional)
-        <input id="ttl" type="text" placeholder="e.g. 8h" />
-      </label>
+    </div>
+
+    <div class="section">
+      <h2>Executors</h2>
+      <div class="grid">
+        <label>Count <input id="numExecutors" type="number" min="1" step="1" /></label>
+        <label>Cores <input id="executorCores" type="number" min="1" step="1" /></label>
+        <label>Memory <input id="executorMemory" type="text" placeholder="16G" /></label>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Session</h2>
+      <div class="grid">
+        <label>Heartbeat timeout (sec) <input id="heartbeatTimeoutInSecond" type="number" min="30" step="1" /></label>
+        <label>TTL (optional) <input id="ttl" type="text" placeholder="e.g. 8h" /></label>
+      </div>
+      <p class="hint">Heartbeat timeout is how long Livy waits between client pings before stopping the session. TTL is the maximum session lifetime.</p>
     </div>
 
     <div class="section">
@@ -338,6 +358,13 @@ export function renderSessionPresetEditorHtml(preset: SessionPreset | undefined)
       <div id="sparkConfRows" class="kv-list"></div>
       <button type="button" class="secondary" id="addSparkConfRow">Add entry</button>
       <p class="hint">Spark configuration passed to Livy when the session starts. Click a key field or type to pick from common options.</p>
+    </div>
+
+    <div class="section">
+      <h2>Spark packages</h2>
+      <div id="sparkPackageRows" class="package-list"></div>
+      <button type="button" class="secondary" id="addSparkPackageRow">Add package</button>
+      <p class="hint">Resolved from Maven and added to spark.jars.packages when the session starts. Use one Maven coordinate per row (e.g. org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.0).</p>
     </div>
 
     <div class="section">
@@ -370,6 +397,7 @@ export function renderSessionPresetEditorHtml(preset: SessionPreset | undefined)
       heartbeatTimeoutInSecond: document.getElementById('heartbeatTimeoutInSecond'),
       ttl: document.getElementById('ttl'),
       sparkConfRows: document.getElementById('sparkConfRows'),
+      sparkPackageRows: document.getElementById('sparkPackageRows'),
       pythonPackageRows: document.getElementById('pythonPackageRows'),
     };
 
@@ -580,6 +608,73 @@ export function renderSessionPresetEditorHtml(preset: SessionPreset | undefined)
       return conf;
     }
 
+    function addSparkPackageRow(spec = '', focus = false) {
+      const row = document.createElement('div');
+      row.className = 'package-row';
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'spark-package-spec';
+      input.placeholder = 'e.g. org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.0';
+      input.value = spec;
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn-icon remove-row';
+      removeBtn.title = 'Remove package';
+      removeBtn.textContent = '✕';
+      removeBtn.onclick = () => row.remove();
+
+      row.appendChild(input);
+      row.appendChild(removeBtn);
+      els.sparkPackageRows.appendChild(row);
+
+      if (focus) {
+        input.focus();
+      }
+    }
+
+    function renderSparkPackageRows(packages) {
+      els.sparkPackageRows.innerHTML = '';
+      const specs = Array.isArray(packages) ? packages.filter(Boolean) : [];
+      if (specs.length === 0) {
+        return;
+      }
+      for (const spec of specs) {
+        addSparkPackageRow(spec, false);
+      }
+    }
+
+    function readSparkPackages() {
+      const rows = els.sparkPackageRows.querySelectorAll('.package-row');
+      const packages = [];
+      const seen = new Set();
+      const invalid = [];
+
+      for (const row of rows) {
+        const spec = row.querySelector('.spark-package-spec').value.trim();
+        if (!spec) {
+          continue;
+        }
+        if (!PACKAGE_SPEC_PATTERN.test(spec)) {
+          invalid.push(spec);
+          continue;
+        }
+        if (seen.has(spec)) {
+          continue;
+        }
+        seen.add(spec);
+        packages.push(spec);
+      }
+
+      if (invalid.length > 0) {
+        alert('Invalid Spark package spec(s): ' + invalid.join(', '));
+        return null;
+      }
+
+      return packages;
+    }
+
     function addPythonPackageRow(spec = '', focus = false) {
       const row = document.createElement('div');
       row.className = 'package-row';
@@ -659,12 +754,17 @@ export function renderSessionPresetEditorHtml(preset: SessionPreset | undefined)
       els.heartbeatTimeoutInSecond.value = current.heartbeatTimeoutInSecond ?? 60;
       els.ttl.value = current.ttl || '';
       renderSparkConfRows(current.sparkConf || {});
+      renderSparkPackageRows(current.sparkPackages || []);
       renderPythonPackageRows(current.pythonPackages || []);
     }
 
     function readForm() {
       const sparkConf = readSparkConf();
       if (sparkConf === null) {
+        return null;
+      }
+      const sparkPackages = readSparkPackages();
+      if (sparkPackages === null) {
         return null;
       }
       const pythonPackages = readPythonPackages();
@@ -686,11 +786,13 @@ export function renderSessionPresetEditorHtml(preset: SessionPreset | undefined)
         heartbeatTimeoutInSecond: Number(els.heartbeatTimeoutInSecond.value) || 60,
         ttl: els.ttl.value.trim() || undefined,
         sparkConf,
+        sparkPackages,
         pythonPackages,
       };
     }
 
     document.getElementById('addSparkConfRow').onclick = () => addSparkConfRow('', '', true);
+    document.getElementById('addSparkPackageRow').onclick = () => addSparkPackageRow('', true);
     document.getElementById('addPythonPackageRow').onclick = () => addPythonPackageRow('', true);
 
     document.getElementById('saveBtn').onclick = () => {
@@ -709,7 +811,7 @@ export function renderSessionPresetEditorHtml(preset: SessionPreset | undefined)
 }
 
 function presetSourceSubtitle(preset: SessionPreset): string {
-  const base = 'Executor sizing, memory, IAM role, Spark conf, and Python packages for new Livy sessions.';
+  const base = 'Executor sizing, memory, IAM role, Spark conf, Spark packages, and Python packages for new Livy sessions.';
   if (preset.source === 'workspace') {
     return `Team preset — stored in .vscode/emr-serverless-presets.json (committed with the repo). ${base}`;
   }

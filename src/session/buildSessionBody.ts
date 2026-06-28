@@ -1,3 +1,4 @@
+import { applySparkPackagesToConf } from './sparkPackages';
 import { buildDefaultPreset } from './presetModel';
 import type { SessionPreset } from './presets';
 
@@ -24,6 +25,7 @@ function resolveSessionName(
 
 function buildFromPreset(preset: SessionPreset, sessionName?: string): Record<string, unknown> {
   const conf = { ...preset.sparkConf };
+  applySparkPackagesToConf(conf, preset.sparkPackages);
   if (preset.executionRoleArn) {
     conf['emr-serverless.session.executionRoleArn'] = preset.executionRoleArn;
   }
