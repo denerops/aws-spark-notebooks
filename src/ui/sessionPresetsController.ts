@@ -3,6 +3,7 @@ import type { SessionPreset, SessionPresetStore } from '../session/presets';
 import { getSparkConfSuggestionsForEditor } from '../session/sparkConfSuggestions';
 import { assertValidPythonPackageSpecs, normalizePythonPackages } from '../session/pythonPackages';
 import { assertValidSparkPackageSpecs, normalizeSparkPackages } from '../session/sparkPackages';
+import { escapeHtml, renderWebviewPage } from './webviewDesignSystem';
 
 export type PresetPanelMessage =
   | { type: 'save'; preset: SessionPreset }
@@ -113,274 +114,98 @@ export class SessionPresetsController {
 
 export function renderSessionPresetEditorHtml(preset: SessionPreset | undefined): string {
   if (!preset) {
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-descriptionForeground);
-      padding: 24px;
-    }
-  </style>
-</head>
-<body>
-  <p>Select a preset from the <strong>Session Presets</strong> panel in the sidebar to edit it.</p>
-</body>
-</html>`;
+    return renderWebviewPage({
+      title: 'Session Preset',
+      body: `<p class="empty-state">Select a preset from the <strong>Session Presets</strong> panel in the sidebar to edit it.</p>`,
+    });
   }
 
   const presetJson = JSON.stringify(preset);
   const sparkConfSuggestionsJson = JSON.stringify(getSparkConfSuggestionsForEditor());
   const packageSpecPatternJson = JSON.stringify('^[^\\s;&|`$()]+$');
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml(preset.name)}</title>
-  <style>
-    :root {
-      --gap: 12px;
-      --border: var(--vscode-panel-border, #444);
-      --input-bg: var(--vscode-input-background);
-      --input-fg: var(--vscode-input-foreground);
-      --btn-bg: var(--vscode-button-background);
-      --btn-fg: var(--vscode-button-foreground);
-      --btn-hover: var(--vscode-button-hoverBackground);
-      --muted: var(--vscode-descriptionForeground);
-    }
-    * { box-sizing: border-box; }
-    body {
-      font-family: var(--vscode-font-family);
-      font-size: var(--vscode-font-size);
-      color: var(--vscode-foreground);
-      background: var(--vscode-editor-background);
-      margin: 0;
-      padding: 16px;
-      max-width: 720px;
-    }
-    h1 { font-size: 1.25rem; margin: 0 0 4px; font-weight: 600; }
-    .subtitle { color: var(--muted); margin-bottom: 16px; font-size: 0.9rem; }
-    .form-panel {
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 16px;
-    }
-    .section { margin-bottom: 20px; }
-    .section h2 {
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: var(--muted);
-      margin: 0 0 10px;
-      font-weight: 600;
-    }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
-    @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
-    label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
-    input, textarea {
-      background: var(--input-bg);
-      color: var(--input-fg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 6px 8px;
-      font: inherit;
-      width: 100%;
-    }
-    textarea { min-height: 100px; font-family: var(--vscode-editor-font-family); font-size: 0.85rem; }
-    .hint { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
-    .kv-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-    .kv-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr auto;
-      gap: 8px;
-      align-items: start;
-    }
-    .kv-key-wrap { position: relative; min-width: 0; }
-    .kv-suggestions {
-      position: absolute;
-      top: calc(100% + 4px);
-      left: 0;
-      right: 0;
-      z-index: 20;
-      max-height: 220px;
-      overflow-y: auto;
-      background: var(--vscode-dropdown-background, var(--input-bg));
-      color: var(--vscode-dropdown-foreground, var(--input-fg));
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    }
-    .kv-suggestions[hidden] { display: none; }
-    .kv-suggestion {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 2px;
-      width: 100%;
-      text-align: left;
-      background: transparent;
-      color: inherit;
-      border: none;
-      border-bottom: 1px solid var(--border);
-      padding: 8px 10px;
-      cursor: pointer;
-      font: inherit;
-    }
-    .kv-suggestion:last-child { border-bottom: none; }
-    .kv-suggestion:hover,
-    .kv-suggestion.active {
-      background: var(--vscode-list-hoverBackground);
-    }
-    .kv-suggestion-key {
-      font-family: var(--vscode-editor-font-family);
-      font-size: 0.85rem;
-      word-break: break-all;
-    }
-    .kv-suggestion-value {
-      font-size: 0.75rem;
-      color: var(--muted);
-      word-break: break-all;
-    }
-    .kv-suggestion-desc {
-      font-size: 0.72rem;
-      color: var(--muted);
-    }
-    .package-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-    .package-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
-      align-items: center;
-    }
-    @media (max-width: 600px) {
-      .kv-row { grid-template-columns: 1fr; }
-      .kv-row .btn-icon { justify-self: start; }
-    }
-    .btn-icon {
-      background: transparent;
-      color: var(--vscode-foreground);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      width: 32px;
-      height: 32px;
-      cursor: pointer;
-      font: inherit;
-      line-height: 1;
-      padding: 0;
-    }
-    .btn-icon:hover { background: var(--vscode-toolbar-hoverBackground); }
-    button.secondary {
-      background: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-      border: none;
-      border-radius: 4px;
-      padding: 6px 12px;
-      cursor: pointer;
-      font: inherit;
-    }
-    button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
-    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
-    button.primary, button.danger {
-      border: none;
-      border-radius: 4px;
-      padding: 6px 14px;
-      cursor: pointer;
-      font: inherit;
-    }
-    button.primary { background: var(--btn-bg); color: var(--btn-fg); }
-    button.primary:hover { background: var(--btn-hover); }
-    button.danger {
-      background: transparent;
-      color: var(--vscode-errorForeground);
-      border: 1px solid var(--vscode-errorForeground);
-    }
-  </style>
-</head>
-<body>
-  <h1>${escapeHtml(preset.name)}</h1>
-  <p class="subtitle">${presetSourceSubtitle(preset)}</p>
+  return renderWebviewPage({
+    title: preset.name,
+    body: `
+  <header class="page-header">
+    <h1>${escapeHtml(preset.name)}</h1>
+    <p class="page-description">${presetSourceSubtitle(preset)}</p>
+  </header>
 
-  <div class="form-panel">
-    <div class="section">
-      <h2>General</h2>
-      <label>
-        Name
-        <input id="name" type="text" placeholder="e.g. Small dev cluster" />
-      </label>
-      <label>
-        Livy session name (optional)
-        <input id="livySessionName" type="text" placeholder="e.g. notebook_dev" />
-      </label>
-      <p class="hint">When set, appears in the EMR Serverless sidebar instead of Session N.</p>
+  <section class="settings-group">
+    <h2>General</h2>
+    <label class="field">
+      <span class="field-label">Name</span>
+      <input id="name" type="text" placeholder="e.g. Small dev cluster" />
+    </label>
+    <label class="field">
+      <span class="field-label">Livy session name (optional)</span>
+      <input id="livySessionName" type="text" placeholder="e.g. notebook_dev" />
+    </label>
+    <p class="hint">When set, appears in the EMR Serverless sidebar instead of Session N.</p>
+  </section>
+
+  <section class="settings-group">
+    <h2>IAM</h2>
+    <label class="field">
+      <span class="field-label">Execution role ARN</span>
+      <input id="executionRoleArn" type="text" placeholder="arn:aws:iam::123456789012:role/EMRServerlessRole" />
+    </label>
+    <p class="hint">Passed as emr-serverless.session.executionRoleArn. Your user needs iam:PassRole on this role.</p>
+  </section>
+
+  <section class="settings-group">
+    <h2>Driver</h2>
+    <div class="grid">
+      <label class="field"><span class="field-label">Memory</span> <input id="driverMemory" type="text" placeholder="4G" /></label>
+      <label class="field"><span class="field-label">Cores (optional)</span> <input id="driverCores" type="number" min="1" step="1" /></label>
     </div>
+  </section>
 
-    <div class="section">
-      <h2>IAM</h2>
-      <label>
-        Execution role ARN
-        <input id="executionRoleArn" type="text" placeholder="arn:aws:iam::123456789012:role/EMRServerlessRole" />
-      </label>
-      <p class="hint">Passed as emr-serverless.session.executionRoleArn. Your user needs iam:PassRole on this role.</p>
+  <section class="settings-group">
+    <h2>Executors</h2>
+    <div class="grid">
+      <label class="field"><span class="field-label">Count</span> <input id="numExecutors" type="number" min="1" step="1" /></label>
+      <label class="field"><span class="field-label">Cores</span> <input id="executorCores" type="number" min="1" step="1" /></label>
+      <label class="field"><span class="field-label">Memory</span> <input id="executorMemory" type="text" placeholder="16G" /></label>
     </div>
+  </section>
 
-    <div class="section">
-      <h2>Driver</h2>
-      <div class="grid">
-        <label>Memory <input id="driverMemory" type="text" placeholder="4G" /></label>
-        <label>Cores (optional) <input id="driverCores" type="number" min="1" step="1" /></label>
-      </div>
+  <section class="settings-group">
+    <h2>Session</h2>
+    <div class="grid">
+      <label class="field"><span class="field-label">Heartbeat timeout (sec)</span> <input id="heartbeatTimeoutInSecond" type="number" min="30" step="1" /></label>
+      <label class="field"><span class="field-label">TTL (optional)</span> <input id="ttl" type="text" placeholder="e.g. 8h" /></label>
     </div>
+    <p class="hint">Heartbeat timeout is how long Livy waits between client pings before stopping the session. TTL is the maximum session lifetime.</p>
+  </section>
 
-    <div class="section">
-      <h2>Executors</h2>
-      <div class="grid">
-        <label>Count <input id="numExecutors" type="number" min="1" step="1" /></label>
-        <label>Cores <input id="executorCores" type="number" min="1" step="1" /></label>
-        <label>Memory <input id="executorMemory" type="text" placeholder="16G" /></label>
-      </div>
-    </div>
+  <section class="settings-group">
+    <h2>Spark conf</h2>
+    <div id="sparkConfRows" class="kv-list"></div>
+    <button type="button" class="secondary" id="addSparkConfRow">Add entry</button>
+    <p class="hint">Spark configuration passed to Livy when the session starts. Click a key field or type to pick from common options.</p>
+  </section>
 
-    <div class="section">
-      <h2>Session</h2>
-      <div class="grid">
-        <label>Heartbeat timeout (sec) <input id="heartbeatTimeoutInSecond" type="number" min="30" step="1" /></label>
-        <label>TTL (optional) <input id="ttl" type="text" placeholder="e.g. 8h" /></label>
-      </div>
-      <p class="hint">Heartbeat timeout is how long Livy waits between client pings before stopping the session. TTL is the maximum session lifetime.</p>
-    </div>
+  <section class="settings-group">
+    <h2>Spark packages</h2>
+    <div id="sparkPackageRows" class="package-list"></div>
+    <button type="button" class="secondary" id="addSparkPackageRow">Add package</button>
+    <p class="hint">Resolved from Maven and added to spark.jars.packages when the session starts. Use one Maven coordinate per row (e.g. org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.0).</p>
+  </section>
 
-    <div class="section">
-      <h2>Spark conf</h2>
-      <div id="sparkConfRows" class="kv-list"></div>
-      <button type="button" class="secondary" id="addSparkConfRow">Add entry</button>
-      <p class="hint">Spark configuration passed to Livy when the session starts. Click a key field or type to pick from common options.</p>
-    </div>
+  <section class="settings-group">
+    <h2>Python packages</h2>
+    <div id="pythonPackageRows" class="package-list"></div>
+    <button type="button" class="secondary" id="addPythonPackageRow">Add package</button>
+    <p class="hint">Installed with pip when the session starts. Use one PyPI spec per row (e.g. pandas, scikit-learn==1.3.0). For native deps, use spark.archives in Spark conf.</p>
+  </section>
 
-    <div class="section">
-      <h2>Spark packages</h2>
-      <div id="sparkPackageRows" class="package-list"></div>
-      <button type="button" class="secondary" id="addSparkPackageRow">Add package</button>
-      <p class="hint">Resolved from Maven and added to spark.jars.packages when the session starts. Use one Maven coordinate per row (e.g. org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.0).</p>
-    </div>
-
-    <div class="section">
-      <h2>Python packages</h2>
-      <div id="pythonPackageRows" class="package-list"></div>
-      <button type="button" class="secondary" id="addPythonPackageRow">Add package</button>
-      <p class="hint">Installed with pip when the session starts. Use one PyPI spec per row (e.g. pandas, scikit-learn==1.3.0). For native deps, use spark.archives in Spark conf.</p>
-    </div>
-
-    <div class="actions">
-      <button class="primary" id="saveBtn">Save preset</button>
-      <button class="danger" id="deleteBtn">Delete preset</button>
-    </div>
-  </div>
-
-  <script>
+  <div class="actions">
+    <button type="button" id="saveBtn">Save preset</button>
+    <button type="button" class="danger" id="deleteBtn">Delete preset</button>
+  </div>`,
+    script: `
     const vscode = acquireVsCodeApi();
     let current = ${presetJson};
     const sparkConfSuggestions = ${sparkConfSuggestionsJson};
@@ -805,9 +630,8 @@ export function renderSessionPresetEditorHtml(preset: SessionPreset | undefined)
     };
 
     fillForm();
-  </script>
-</body>
-</html>`;
+`,
+  });
 }
 
 function presetSourceSubtitle(preset: SessionPreset): string {
@@ -821,10 +645,3 @@ function presetSourceSubtitle(preset: SessionPreset): string {
   return base;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
