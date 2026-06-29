@@ -3,7 +3,7 @@
   "displayName": "EMR Serverless PySpark",
   "description": "Run PySpark and Spark SQL in .sparknb and .ipynb notebooks on EMR Serverless via Apache Livy",
   "version": "0.1.1",
-  "publisher": "emr-serverless",
+  "publisher": "denerops",
   "license": "MIT",
   "repository": {
     "type": "git",
