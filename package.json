@@ -104,6 +104,11 @@
         "category": "EMR Serverless"
       },
       {
+        "command": "emrServerless.selectAwsRegion",
+        "title": "Select AWS Region",
+        "category": "EMR Serverless"
+      },
+      {
         "command": "emrServerless.refreshApplications",
         "title": "Refresh",
         "icon": "$(refresh)",
@@ -434,6 +439,11 @@
           "type": "string",
           "default": "",
           "description": "AWS shared config profile for EMR Serverless API calls. Empty uses the default credential chain (AWS_PROFILE environment variable, then default)."
+        },
+        "emrServerless.awsRegion": {
+          "type": "string",
+          "default": "",
+          "description": "AWS region for EMR Serverless API calls. Empty uses the region from the selected AWS profile (~/.aws/config) or AWS_REGION. Click the globe icon in the status bar to change."
         }
       }
     }

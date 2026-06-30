@@ -32,8 +32,13 @@ export class EmrServerlessService {
 
   private async getClient(): Promise<EMRServerlessClient> {
     const configuredProfile = getConfiguredAwsProfile();
-    if (!this.client || this.activeProfile !== configuredProfile) {
-      this.region = await getDefaultRegion();
+    const region = await getDefaultRegion();
+    if (
+      !this.client ||
+      this.activeProfile !== configuredProfile ||
+      this.region !== region
+    ) {
+      this.region = region;
       this.client = new EMRServerlessClient({
         region: this.region,
         credentials: getCredentialProvider(),

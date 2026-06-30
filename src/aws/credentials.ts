@@ -1,11 +1,11 @@
 import { fromIni, fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { loadSharedConfigFiles } from '@smithy/shared-ini-file-loader';
 import type { AwsCredentialIdentityProvider } from '@smithy/types';
-import { getConfiguredAwsProfile } from './config';
+import { getConfiguredAwsProfile, getConfiguredAwsRegion } from './config';
 
 let credentialProvider: AwsCredentialIdentityProvider | undefined;
 let cachedRegion: string | undefined;
-let cachedRegionProfile: string | undefined;
+let cachedRegionKey: string | undefined;
 let activeCredentialProfile: string | undefined;
 
 export function getEffectiveAwsProfile(): string {
@@ -25,14 +25,22 @@ export function getCredentialProvider(): AwsCredentialIdentityProvider {
 
 export async function getDefaultRegion(): Promise<string> {
   const profile = getEffectiveAwsProfile();
-  if (cachedRegion && cachedRegionProfile === profile) {
+  const configuredRegion = getConfiguredAwsRegion();
+  const cacheKey = `${profile}:${configuredRegion ?? ''}`;
+  if (cachedRegion && cachedRegionKey === cacheKey) {
     return cachedRegion;
+  }
+
+  if (configuredRegion) {
+    cachedRegion = configuredRegion;
+    cachedRegionKey = cacheKey;
+    return configuredRegion;
   }
 
   const envRegion = process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION;
   if (envRegion && !getConfiguredAwsProfile()) {
     cachedRegion = envRegion;
-    cachedRegionProfile = profile;
+    cachedRegionKey = cacheKey;
     return cachedRegion;
   }
 
@@ -41,25 +49,25 @@ export async function getDefaultRegion(): Promise<string> {
   const region = section?.region;
   if (region) {
     cachedRegion = region;
-    cachedRegionProfile = profile;
+    cachedRegionKey = cacheKey;
     return cachedRegion;
   }
 
   if (envRegion) {
     cachedRegion = envRegion;
-    cachedRegionProfile = profile;
+    cachedRegionKey = cacheKey;
     return cachedRegion;
   }
 
   throw new Error(
-    `No AWS region found for profile "${profile}". Set AWS_REGION or add region to ~/.aws/config.`
+    `No AWS region found for profile "${profile}". Select a region in the status bar or set AWS_REGION / ~/.aws/config.`
   );
 }
 
 export function resetAwsClients(): void {
   credentialProvider = undefined;
   cachedRegion = undefined;
-  cachedRegionProfile = undefined;
+  cachedRegionKey = undefined;
   activeCredentialProfile = undefined;
 }
 

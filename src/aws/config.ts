@@ -39,4 +39,9 @@ export function getConfiguredAwsProfile(): string | undefined {
   return configured || undefined;
 }
 
+export function getConfiguredAwsRegion(): string | undefined {
+  const configured = getExtensionConfig().get<string>('awsRegion', '').trim();
+  return configured || undefined;
+}
+
 export { buildCreateSessionBody } from '../session/buildSessionBody';

@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { getConfiguredAwsProfile, getExtensionConfig } from './config';
 import { getEffectiveAwsProfile, resetAwsClients } from './credentials';
 import { resetEmrServerlessService } from './emrServerlessClient';
+import { getProfileDefaultRegion, syncRegionFromProfile } from './region';
 
 export interface AwsProfileInfo {
   name: string;
@@ -101,13 +102,13 @@ export async function promptAwsProfileSelection(): Promise<boolean> {
 export async function applyAwsProfileChange(
   onRefresh: () => void | Promise<void>
 ): Promise<void> {
+  await syncRegionFromProfile();
   resetAwsClients();
   resetEmrServerlessService();
 
   try {
     const profile = getEffectiveAwsProfile();
-    const { configFile } = await loadSharedConfigFiles();
-    const region = configFile[profile]?.region;
+    const region = await getProfileDefaultRegion(profile);
     const label = getConfiguredAwsProfile() ?? `auto (${process.env.AWS_PROFILE ?? 'default'})`;
     void vscode.window.showInformationMessage(
       region
