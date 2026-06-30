@@ -11,7 +11,7 @@ A VS Code / Cursor extension for running **PySpark** and **Spark SQL** in `.spar
 - Spark UI links via `GetDashboardForJobRun` (with `GetResourceDashboard` fallback)
 - Iceberg + Glue catalog configuration merged into new Livy sessions
 - Jupyter-compatible `.ipynb` support alongside `.sparknb`
-- Status bar showing region, application, session state, and Spark UI shortcut
+- Status bar Spark UI shortcut when connected; AWS profile, region, and session controls in the sidebar
 
 ## Prerequisites
 
@@ -73,7 +73,7 @@ Saved Livy `POST /sessions` configurations (driver/executor sizing, execution ro
 - Use **+** in the panel title to create a new preset (team **workspace** or **personal** scope).
 - **Team presets** live in `.vscode/emr-serverless-presets.json` and are shared via version control.
 - **Personal presets** are stored locally in extension global state.
-- Open the workspace file with **EMR Serverless: Open Workspace Presets File** (toolbar on Session Presets view).
+- Open the workspace file with **EMR Serverless: Open Workspace Presets File** (toolbar on Config view).
 - Copy personal presets into the workspace file with **EMR Serverless: Export Personal Presets to Workspace**.
 - When creating a session from the sidebar or kernel picker, you choose which preset to apply.
 - Iceberg/Glue catalog conf from settings is always merged on top of preset `sparkConf` for **new** sessions.
@@ -107,14 +107,32 @@ Commit `.vscode/emr-serverless-presets.json` so the team shares the same Livy se
 
 Configure the file path with `emrServerless.sessionPresets.workspaceFile`. The sidebar shows **workspace** vs **personal** presets with distinct icons.
 
+## Sidebar
+
+The **EMR Serverless** activity bar panel has two views:
+
+### Applications (top)
+
+Lists Livy-enabled EMR Serverless applications in the selected region. Expand a running application to see sessions, attach, create new sessions, or open Spark UI.
+
+### Config
+
+AWS credentials, region, and session presets in one tree:
+
+| Level | Item | Action |
+|-------|------|--------|
+| 1 | **AWS Profile** | Click to pick a profile or use auto (environment) |
+| 1 | **AWS Region** | Click to pick the region for EMR Serverless API calls |
+| 1 | **Session Presets** | Expand to browse all presets |
+| 2 | *preset name* | Click to edit — `workspace` or `personal` shown in description; repo/account icon |
+
+Toolbar: **Refresh**, **New Session Preset**, **Open Workspace Presets File**.
+
+Connect notebooks via the **kernel picker**, **Applications** tree, or **Connect to EMR Serverless Session**.
+
 ## Status bar
 
-Two items appear on the left when the extension is active:
-
-| Item | Connected | Disconnected |
-|------|-----------|--------------|
-| Session | `region \| appId \| session N \| state` — click to connect | `EMR region — disconnected` — click to connect |
-| Spark UI | `Spark UI` — opens dashboard URL | Hidden |
+When a notebook is connected to a Livy session, **Spark UI** appears on the left (opens the dashboard URL). **EMR Help** stays on the right.
 
 ## Kernel picker
 
@@ -148,7 +166,7 @@ Use the kernel picker (**Select EMR Serverless Session**) or run a cell to conne
 | Stop Session | Terminate a Livy session |
 | Open Spark UI | Open dashboard URL in browser |
 | Refresh Spark UI Link | Regenerate URL (~1 h validity) |
-| Focus Session Presets | Open the Session Presets sidebar view |
+| Focus Config | Open the Config sidebar view |
 | Edit Session Preset | Open preset editor for the selected preset |
 | New Session Preset | Create a new preset |
 | Open Workspace Presets File | Open `.vscode/emr-serverless-presets.json` for team sharing |
@@ -173,7 +191,7 @@ Use the kernel picker (**Select EMR Serverless Session**) or run a cell to conne
 | `emrServerless.sessionPresets.preferWorkspace` | `true` | Default new presets to the workspace file when a folder is open |
 | `emrServerless.awsProfile` | *(empty)* | Named AWS profile for API calls; empty uses `AWS_PROFILE` / default chain |
 
-Click the **$(key)** item in the status bar to change profile. Region comes from the selected profile in `~/.aws/config`. Changing profile disconnects open notebook sessions.
+Click **AWS Profile** in the **Config** sidebar view to change profile. Region comes from the selected profile in `~/.aws/config`. Changing profile disconnects open notebook sessions.
 
 ## Notebook format (`.sparknb` / `.ipynb`)
 

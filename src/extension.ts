@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { registerApplicationsTree } from './browser/applicationsTreeProvider';
+import { registerConfigTree } from './browser/configTreeProvider';
 import {
   createNewNotebook,
   registerApplicationsActions,
 } from './browser/applicationsActions';
-import { registerSessionPresetsTree } from './browser/sessionPresetsTreeProvider';
 import { registerSessionPresetsActions } from './browser/sessionPresetsActions';
 import { ConnectionManager } from './emr/connectionManager';
 import { registerKernelManager, type EmrKernelManager } from './notebook/kernelManager';
@@ -14,12 +14,14 @@ import { isEmrSparkNotebook } from './notebook/types';
 import { ConnectionStatusBar } from './ui/statusBar';
 import { promptEmrConnection } from './ui/connectWizard';
 import { applyAwsProfileChange, promptAwsProfileSelection } from './aws/profile';
+import { applyAwsRegionChange, promptAwsRegionSelection, syncRegionFromProfile } from './aws/region';
 import { getSessionPresetStore } from './session/presets';
 import { registerTableRendererMessaging } from './output/tableCountMessaging';
 import { registerWelcomePage, showWelcomeOnFirstInstall } from './ui/welcomePage';
 
 let connectionManager: ConnectionManager;
 let statusBar: ConnectionStatusBar;
+let configTree: ReturnType<typeof registerConfigTree>;
 let applicationsTree: ReturnType<typeof registerApplicationsTree>;
 let kernelManager: EmrKernelManager;
 
@@ -27,45 +29,86 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   connectionManager = new ConnectionManager();
   statusBar = new ConnectionStatusBar(connectionManager);
   const presetStore = getSessionPresetStore(context);
+  configTree = registerConfigTree(context, presetStore);
 
   registerSerializer(context);
   kernelManager = registerKernelManager(context, connectionManager, presetStore);
   applicationsTree = registerApplicationsTree(context, connectionManager);
   registerApplicationsActions(context, connectionManager, applicationsTree, kernelManager);
-  const presetsTree = registerSessionPresetsTree(context, presetStore);
-  registerSessionPresetsActions(context, presetStore, presetsTree);
+  registerSessionPresetsActions(context, presetStore, configTree);
   registerTableRendererMessaging(context, connectionManager);
   registerWelcomePage(context);
 
   context.subscriptions.push(statusBar);
 
-  const refreshAfterAwsProfileChange = async (): Promise<void> => {
+  const refreshSidebar = (notebook?: vscode.NotebookDocument): void => {
+    statusBar.update(notebook);
+  };
+
+  const refreshAfterAwsContextChange = async (reason: 'profile' | 'region' | 'both'): Promise<void> => {
     if (connectionManager.listBindings().length > 0) {
       await connectionManager.disconnectAll();
-      void vscode.window.showWarningMessage(
-        'Disconnected notebook sessions because the AWS profile changed.'
-      );
+      const message =
+        reason === 'both'
+          ? 'Disconnected notebook sessions because the AWS profile or region changed.'
+          : reason === 'profile'
+            ? 'Disconnected notebook sessions because the AWS profile changed.'
+            : 'Disconnected notebook sessions because the AWS region changed.';
+      void vscode.window.showWarningMessage(message);
       for (const notebook of vscode.workspace.notebookDocuments) {
         if (isEmrSparkNotebook(notebook)) {
           kernelManager.updateKernelAppearance(notebook);
         }
       }
     }
-    await statusBar.refreshAwsContext();
+    await configTree.refreshAwsContext();
+    refreshSidebar();
     applicationsTree.refresh();
   };
 
+  let handlingAwsContextChange = false;
+
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (event.affectsConfiguration('emrServerless.awsProfile')) {
-        await applyAwsProfileChange(refreshAfterAwsProfileChange);
+      if (handlingAwsContextChange) {
+        return;
       }
+      const profileChanged = event.affectsConfiguration('emrServerless.awsProfile');
+      const regionChanged = event.affectsConfiguration('emrServerless.awsRegion');
+      if (!profileChanged && !regionChanged) {
+        return;
+      }
+
+      handlingAwsContextChange = true;
+      try {
+        if (profileChanged) {
+          await applyAwsProfileChange(() =>
+            refreshAfterAwsContextChange(regionChanged ? 'both' : 'profile')
+          );
+          return;
+        }
+        await applyAwsRegionChange(() => refreshAfterAwsContextChange('region'));
+      } finally {
+        handlingAwsContextChange = false;
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('emrServerless.refreshSidebarState', () => {
+      refreshSidebar();
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.selectAwsProfile', async () => {
       await promptAwsProfileSelection();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('emrServerless.selectAwsRegion', async () => {
+      await promptAwsRegionSelection();
     })
   );
 
@@ -104,7 +147,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       await kernelManager.promptKernelSelection(notebook);
-      statusBar.update(notebook);
+      refreshSidebar(notebook);
       applicationsTree.refresh();
     })
   );
@@ -118,14 +161,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         notebook && isEmrSparkNotebook(notebook) ? notebook : undefined,
         (nb) => {
           kernelManager.updateKernelAppearance(nb);
-          statusBar.update(nb);
+          refreshSidebar(nb);
           applicationsTree.refresh();
           notifyDashboardAvailable(nb);
         }
       );
       if (connected && notebook && isEmrSparkNotebook(notebook)) {
         kernelManager.updateKernelAppearance(notebook);
-        statusBar.update(notebook);
+        refreshSidebar(notebook);
         applicationsTree.refresh();
         notifyDashboardAvailable(notebook);
       }
@@ -139,7 +182,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await connectionManager.disconnectNotebook(notebook);
         kernelManager.updateKernelAppearance(notebook);
       }
-      statusBar.update();
+      refreshSidebar();
     })
   );
 
@@ -149,14 +192,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       connectionManager.releaseNotebookBinding(notebook);
-      statusBar.update();
+      refreshSidebar();
       applicationsTree.refresh();
     })
   );
 
   context.subscriptions.push(
     vscode.window.onDidChangeActiveNotebookEditor((editor) => {
-      statusBar.update();
+      refreshSidebar(editor?.notebook);
       if (editor && isEmrSparkNotebook(editor.notebook)) {
         kernelManager.updateKernelAppearance(editor.notebook);
       }
@@ -164,6 +207,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   statusBar.show();
+  void syncRegionFromProfile().then(() => configTree.refreshAwsContext());
   void showWelcomeOnFirstInstall(context);
 }
 

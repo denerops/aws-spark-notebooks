@@ -102,6 +102,7 @@ export class EmrKernelManager implements vscode.Disposable {
     if (connected) {
       this.updateKernelAppearance(notebook);
       void vscode.commands.executeCommand('emrServerless.refreshApplications');
+      void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
     } else {
       this.updateKernelAppearance(notebook);
     }

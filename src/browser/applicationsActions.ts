@@ -194,6 +194,7 @@ export function registerApplicationsActions(
           kernelManager?.updateKernelAppearance(notebook);
           vscode.window.showInformationMessage(`Attached to session ${sessionId}.`);
           void vscode.commands.executeCommand('emrServerless.refreshApplications');
+          void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
@@ -235,6 +236,7 @@ export function registerApplicationsActions(
 
           vscode.window.showInformationMessage(`Session ${sessionId} stopped.`);
           tree.refresh();
+          void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
@@ -316,6 +318,7 @@ export function registerApplicationsActions(
 
           if (targetNotebook) {
             kernelManager?.updateKernelAppearance(targetNotebook);
+            void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
           }
 
           const attachedNote = targetNotebook ? ' and attached to the open notebook' : '';
