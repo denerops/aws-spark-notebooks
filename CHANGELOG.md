@@ -1,3 +1,10 @@
+## [0.4.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.3.0...v0.4.0) (2026-06-30)
+
+### Features
+
+* add AWS region selection and configuration support ([cf1aa31](https://github.com/denerops/aws-spark-notebooks/commit/cf1aa316e4b8fe8b202e5abf53f58c0fdebfea32))
+* refactor EMR Serverless configuration management ([88436e3](https://github.com/denerops/aws-spark-notebooks/commit/88436e3bbb99f435f61b920bdcdbc72dcb4d9e0c))
+
 ## [0.3.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.2.0...v0.3.0) (2026-06-28)
 
 ### Features
