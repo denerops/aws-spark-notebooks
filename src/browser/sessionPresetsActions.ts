@@ -2,17 +2,17 @@ import * as vscode from 'vscode';
 import { createPresetId, buildDefaultPreset } from '../session/presets';
 import type { SessionPresetStore } from '../session/presets';
 import {
-  PresetsTreeItem,
-  SESSION_PRESETS_VIEW_ID,
-  type SessionPresetsTreeProvider,
-} from './sessionPresetsTreeProvider';
+  ConfigTreeItem,
+  CONFIG_VIEW_ID,
+  type ConfigTreeProvider,
+} from './configTreeProvider';
 import { SessionPresetsPanel } from '../ui/sessionPresetsPanel';
 import { pickPresetSource } from '../ui/pickPresetSource';
 import { getWorkspacePresetsUri } from '../session/workspacePresets';
 
 function resolvePresetId(
   presetId: string | undefined,
-  item?: PresetsTreeItem
+  item?: ConfigTreeItem
 ): string | undefined {
   if (presetId) {
     return presetId;
@@ -26,19 +26,19 @@ function resolvePresetId(
 export function registerSessionPresetsActions(
   context: vscode.ExtensionContext,
   store: SessionPresetStore,
-  tree: SessionPresetsTreeProvider
+  tree: ConfigTreeProvider
 ): void {
   const openEditor = (presetId?: string) => {
     SessionPresetsPanel.show(context, store, {
       presetId,
-      onMutated: () => tree.refresh(),
+      onMutated: () => void tree.refreshPresets(),
     });
   };
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'emrServerless.editSessionPreset',
-      (presetId?: string, item?: PresetsTreeItem) => {
+      (presetId?: string, item?: ConfigTreeItem) => {
         openEditor(resolvePresetId(presetId, item));
       }
     )
@@ -60,20 +60,26 @@ export function registerSessionPresetsActions(
         source,
       };
       await store.save(preset, source);
-      tree.refresh();
+      void tree.refreshPresets();
       openEditor(preset.id);
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.refreshSessionPresets', () => {
-      tree.refresh();
+      void tree.refreshPresets();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('emrServerless.refreshConfig', () => {
+      void tree.refreshAll();
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.openSessionPresets', async () => {
-      await vscode.commands.executeCommand(`${SESSION_PRESETS_VIEW_ID}.focus`);
+      await vscode.commands.executeCommand(`${CONFIG_VIEW_ID}.focus`);
     })
   );
 
@@ -96,7 +102,7 @@ export function registerSessionPresetsActions(
           return;
         }
         await store.ensureWorkspacePresetsFile(true);
-        tree.refresh();
+        void tree.refreshPresets();
       }
 
       const doc = await vscode.workspace.openTextDocument(uri);
@@ -108,7 +114,7 @@ export function registerSessionPresetsActions(
     vscode.commands.registerCommand('emrServerless.exportPresetsToWorkspace', async () => {
       try {
         const added = await store.exportUserPresetsToWorkspace();
-        tree.refresh();
+        void tree.refreshPresets();
         if (added === 0) {
           vscode.window.showInformationMessage(
             'All personal presets already exist in the workspace file.'

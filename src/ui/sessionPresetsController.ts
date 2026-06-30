@@ -116,7 +116,7 @@ export function renderSessionPresetEditorHtml(preset: SessionPreset | undefined)
   if (!preset) {
     return renderWebviewPage({
       title: 'Session Preset',
-      body: `<p class="empty-state">Select a preset from the <strong>Session Presets</strong> panel in the sidebar to edit it.</p>`,
+      body: `<p class="empty-state">Select a preset from the <strong>Config</strong> panel in the sidebar to edit it.</p>`,
     });
   }
 

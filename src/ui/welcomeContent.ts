@@ -181,7 +181,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
       <li><a href="#prerequisites">Prerequisites</a></li>
       <li><a href="#quick-start">Quick start</a></li>
       <li><a href="#sidebar-applications">Applications sidebar</a></li>
-      <li><a href="#sidebar-presets">Session presets</a></li>
+      <li><a href="#sidebar-config">Config sidebar</a></li>
       <li><a href="#notebooks">Notebooks</a></li>
       <li><a href="#kernel">Kernel &amp; sessions</a></li>
       <li><a href="#cells">Running cells</a></li>
@@ -211,13 +211,14 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
       <li>IAM permissions for EMR Serverless, Livy, and <code>iam:PassRole</code> on your execution role</li>
       <li>A job execution role ARN (configure in settings or session presets)</li>
     </ul>
-    <div class="tip">Use the status bar <strong>$(key) profile</strong> item or run <strong>EMR Serverless: Select AWS Profile</strong> to pick credentials before connecting.</div>
+    <div class="tip">Use the <strong>Config</strong> sidebar view (<strong>AWS Profile</strong> row) or run <strong>EMR Serverless: Select AWS Profile</strong> to pick credentials before connecting.</div>
   </section>
 
   <section id="quick-start">
     <h2>Quick start</h2>
     <ol>
       <li>Open the <strong>EMR Serverless</strong> activity bar (cloud + spark icon).</li>
+      <li>Set <strong>AWS Profile</strong> and <strong>AWS Region</strong> in the <strong>Config</strong> view (below Applications).</li>
       <li>Click <strong>Refresh</strong> under <strong>Applications</strong> to list Livy-enabled apps.</li>
       <li><strong>Start</strong> a stopped application and wait until state is <code>STARTED</code>.</li>
       <li>Run <strong>EMR Serverless: New EMR Serverless Notebook</strong> or open an existing <code>.ipynb</code> file.</li>
@@ -228,7 +229,8 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
 
   <section id="sidebar-applications">
     <h2>Applications sidebar</h2>
-    <p>Tree: <strong>region</strong> → <strong>application</strong> → <strong>Livy sessions</strong>. Only applications with Livy enabled are shown.</p>
+    <p>The first view in the EMR Serverless panel — browse apps and Livy sessions in the selected region.</p>
+    <p>Tree: <strong>application</strong> → <strong>Livy sessions</strong>. Only applications with Livy enabled are shown.</p>
     <table>
       <thead><tr><th>Action</th><th>How</th></tr></thead>
       <tbody>
@@ -244,17 +246,19 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
     </table>
   </section>
 
-  <section id="sidebar-presets">
-    <h2>Session presets</h2>
-    <p>Presets store Livy <code>POST /sessions</code> configuration: driver/executor sizing, execution role, Spark conf, and timeouts.</p>
-    <ul>
-      <li><strong>Workspace presets</strong> — shared in <code>.vscode/emr-serverless-presets.json</code> (commit to git)</li>
-      <li><strong>Personal presets</strong> — stored locally in extension state</li>
-      <li>Click a preset in the sidebar to edit it in the preset panel</li>
-      <li>Use <strong>+</strong> in the Session Presets toolbar to create a new preset</li>
-      <li><strong>Export Personal Presets to Workspace</strong> copies local presets into the team file</li>
-    </ul>
-    <p>When creating a session (sidebar or kernel picker), choose which preset to apply. Spark conf is taken from the preset only — edit the Default preset or create your own.</p>
+  <section id="sidebar-config">
+    <h2>Config sidebar</h2>
+    <p>AWS credentials, region, and session presets:</p>
+    <table>
+      <thead><tr><th>Level</th><th>Item</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><strong>AWS Profile</strong></td><td>Click to pick a profile or use auto (environment)</td></tr>
+        <tr><td>1</td><td><strong>AWS Region</strong></td><td>Click to pick the region for EMR Serverless API calls</td></tr>
+        <tr><td>1</td><td><strong>Session Presets</strong></td><td>Expand to browse all presets</td></tr>
+        <tr><td>2</td><td><em>preset name</em></td><td>Click to edit — scope and sizing in description; repo/account icon</td></tr>
+      </tbody>
+    </table>
+    <p>Changing profile or region disconnects open notebook sessions. Toolbar: refresh, new preset, open workspace presets file. Use <strong>Export Personal Presets to Workspace</strong> to copy local presets into the team file.</p>
   </section>
 
   <section id="notebooks">
@@ -328,13 +332,11 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
     <table>
       <thead><tr><th>Item</th><th>Description</th></tr></thead>
       <tbody>
-        <tr><td><code>$(key) profile</code></td><td>AWS profile — click to change</td></tr>
-        <tr><td><code>$(cloud) region | app | session</code></td><td>Connected session — click to connect</td></tr>
-        <tr><td><code>$(globe) Spark UI</code></td><td>Open Spark UI (when connected)</td></tr>
+        <tr><td><code>$(globe) Spark UI</code></td><td>Open Spark UI (when a notebook is connected)</td></tr>
         <tr><td><code>$(question) EMR Help</code></td><td>Open this documentation</td></tr>
       </tbody>
     </table>
-    <p>Changing the AWS profile disconnects open notebook sessions.</p>
+    <p>AWS profile and region are in the <strong>Config</strong> sidebar view.</p>
   </section>
 
   <section id="commands">
@@ -352,7 +354,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
         <tr><td>Start / Stop / Restart Application</td><td>Manage EMR Serverless apps</td></tr>
         <tr><td>New Session / Attach / Stop Session</td><td>Manage Livy sessions</td></tr>
         <tr><td>Open Spark UI / Refresh Spark UI Link</td><td>Dashboard access</td></tr>
-        <tr><td>Focus Session Presets</td><td>Open presets sidebar</td></tr>
+        <tr><td>Focus Config</td><td>Open Config sidebar</td></tr>
         <tr><td>New / Edit Session Preset</td><td>Manage session presets</td></tr>
         <tr><td>Open Workspace Presets File</td><td>Edit team presets JSON</td></tr>
         <tr><td>Export Personal Presets to Workspace</td><td>Share local presets with team</td></tr>

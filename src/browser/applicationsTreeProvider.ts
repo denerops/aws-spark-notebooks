@@ -153,17 +153,6 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
         ];
       }
 
-      return [
-        new ApplicationsTreeItem(
-          'region',
-          { region: this.region },
-          `Region: ${this.region}`,
-          vscode.TreeItemCollapsibleState.Expanded
-        ),
-      ];
-    }
-
-    if (element.kind === 'region') {
       return this.applications.map((app) => {
         const running = app.state === 'STARTED';
         const sessionCount = this.sessionsByApp.get(app.id)?.length ?? 0;
@@ -180,6 +169,10 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
           }
         );
       });
+    }
+
+    if (element.kind === 'region') {
+      return [];
     }
 
     if (

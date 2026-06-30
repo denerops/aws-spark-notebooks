@@ -36,7 +36,7 @@
     "onNotebookSerializer:emr-spark",
     "onRenderer:emr-spark-table-renderer",
     "onView:emrServerlessApplications",
-    "onView:emrServerlessSessionPresets"
+    "onView:emrServerlessConfig"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -163,7 +163,7 @@
       },
       {
         "command": "emrServerless.openSessionPresets",
-        "title": "Focus Session Presets",
+        "title": "Focus Config",
         "category": "EMR Serverless"
       },
       {
@@ -178,7 +178,7 @@
         "category": "EMR Serverless"
       },
       {
-        "command": "emrServerless.refreshSessionPresets",
+        "command": "emrServerless.refreshConfig",
         "title": "Refresh",
         "icon": "$(refresh)",
         "category": "EMR Serverless"
@@ -218,8 +218,8 @@
           "icon": "media/emr-serverless.svg"
         },
         {
-          "id": "emrServerlessSessionPresets",
-          "name": "Session Presets",
+          "id": "emrServerlessConfig",
+          "name": "Config",
           "icon": "$(settings-gear)"
         }
       ]
@@ -272,6 +272,26 @@
       ],
       "view/title": [
         {
+          "command": "emrServerless.refreshConfig",
+          "when": "view == emrServerlessConfig",
+          "group": "navigation"
+        },
+        {
+          "command": "emrServerless.newSessionPreset",
+          "when": "view == emrServerlessConfig",
+          "group": "navigation"
+        },
+        {
+          "command": "emrServerless.openWorkspacePresetsFile",
+          "when": "view == emrServerlessConfig",
+          "group": "navigation"
+        },
+        {
+          "command": "emrServerless.openWelcome",
+          "when": "view == emrServerlessConfig",
+          "group": "navigation@99"
+        },
+        {
           "command": "emrServerless.openWelcome",
           "when": "view == emrServerlessApplications",
           "group": "navigation@99"
@@ -279,26 +299,6 @@
         {
           "command": "emrServerless.refreshApplications",
           "when": "view == emrServerlessApplications",
-          "group": "navigation"
-        },
-        {
-          "command": "emrServerless.refreshSessionPresets",
-          "when": "view == emrServerlessSessionPresets",
-          "group": "navigation"
-        },
-        {
-          "command": "emrServerless.openWelcome",
-          "when": "view == emrServerlessSessionPresets",
-          "group": "navigation@99"
-        },
-        {
-          "command": "emrServerless.newSessionPreset",
-          "when": "view == emrServerlessSessionPresets",
-          "group": "navigation"
-        },
-        {
-          "command": "emrServerless.openWorkspacePresetsFile",
-          "when": "view == emrServerlessSessionPresets",
           "group": "navigation"
         },
         {
@@ -443,7 +443,7 @@
         "emrServerless.awsRegion": {
           "type": "string",
           "default": "",
-          "description": "AWS region for EMR Serverless API calls. Empty uses the region from the selected AWS profile (~/.aws/config) or AWS_REGION. Click the globe icon in the status bar to change."
+          "description": "AWS region for EMR Serverless API calls. Empty uses the region from the selected AWS profile (~/.aws/config) or AWS_REGION. Change it in the Config sidebar view."
         }
       }
     }

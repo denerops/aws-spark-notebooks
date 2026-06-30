@@ -60,7 +60,7 @@ export async function getDefaultRegion(): Promise<string> {
   }
 
   throw new Error(
-    `No AWS region found for profile "${profile}". Select a region in the status bar or set AWS_REGION / ~/.aws/config.`
+    `No AWS region found for profile "${profile}". Select a region in the Connection sidebar or set AWS_REGION / ~/.aws/config.`
   );
 }
 
