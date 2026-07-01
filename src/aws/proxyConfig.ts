@@ -153,6 +153,52 @@ export function getAwsClientTransportConfig(
   return handler ? { requestHandler: handler } : {};
 }
 
+function resolveBaseProxyUrl(awsConfigProxyUrl?: string): string | undefined {
+  const vscodeProxy = asTrimmedString(readHttpConfig().get<unknown>('proxy', ''));
+  const envProxy = envProxyUrl();
+  const support = resolveProxySupport();
+
+  if (support === 'off') {
+    return undefined;
+  }
+  if (support === 'override' || support === 'on') {
+    return vscodeProxy || envProxy || awsConfigProxyUrl;
+  }
+  return envProxy || vscodeProxy || awsConfigProxyUrl;
+}
+
+/** Proxy-aware client config for SSO/STS credential refresh inside fromIni(). */
+export function getCredentialProviderClientConfig(
+  awsConfigProxyUrl?: string
+): { requestHandler: NodeHttpHandler } | Record<string, never> {
+  const proxyUrl = resolveBaseProxyUrl(awsConfigProxyUrl);
+  if (!proxyUrl) {
+    return {};
+  }
+  return { requestHandler: getSmithyHandler(proxyUrl) };
+}
+
+/**
+ * Mirror VS Code / AWS CLI proxy settings into process env so Node HTTP clients
+ * (including @aws-sdk/credential-providers SSO refresh) use the same proxy.
+ */
+export function syncProxyEnvironmentFromSettings(awsConfigProxyUrl?: string): void {
+  const proxyUrl = resolveBaseProxyUrl(awsConfigProxyUrl);
+  if (proxyUrl) {
+    if (!process.env.HTTPS_PROXY && !process.env.https_proxy) {
+      process.env.HTTPS_PROXY = proxyUrl;
+    }
+    if (!process.env.HTTP_PROXY && !process.env.http_proxy) {
+      process.env.HTTP_PROXY = proxyUrl;
+    }
+  }
+
+  const noProxy = resolveNoProxyList();
+  if (noProxy.length && !process.env.NO_PROXY && !process.env.no_proxy) {
+    process.env.NO_PROXY = noProxy.join(',');
+  }
+}
+
 function getProxyDispatcher(proxyUrl: string): ProxyAgent {
   const key = `${proxyUrl}|${getProxyStrictSsl()}`;
   let dispatcher = proxyDispatchers.get(key);

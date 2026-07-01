@@ -1,7 +1,7 @@
 import { loadSharedConfigFiles } from '@smithy/shared-ini-file-loader';
 import * as vscode from 'vscode';
 import { getConfiguredAwsProfile, getExtensionConfig } from './config';
-import { getEffectiveAwsProfile, resetAwsClients } from './credentials';
+import { getEffectiveAwsProfile, getResolvedAutoProfile, resetAwsClients } from './credentials';
 import { resetEmrServerlessService } from './emrServerlessClient';
 import { getProfileDefaultRegion, syncRegionFromProfile } from './region';
 
@@ -40,11 +40,18 @@ export async function listAwsProfiles(): Promise<AwsProfileInfo[]> {
 
 export async function getProfileDisplayLabel(): Promise<string> {
   const configured = getConfiguredAwsProfile();
-  if (!configured) {
-    const envProfile = process.env.AWS_PROFILE;
-    return envProfile ? `auto:${envProfile}` : 'auto';
+  if (configured) {
+    return configured;
   }
-  return configured;
+  const envProfile = process.env.AWS_PROFILE;
+  if (envProfile) {
+    return `auto:${envProfile}`;
+  }
+  const autoProfile = getResolvedAutoProfile();
+  if (autoProfile) {
+    return `auto:${autoProfile}`;
+  }
+  return 'auto:default';
 }
 
 type ProfilePickItem = vscode.QuickPickItem & {

@@ -15,6 +15,7 @@ import { ConnectionStatusBar } from './ui/statusBar';
 import { promptEmrConnection } from './ui/connectWizard';
 import { applyAwsProfileChange, promptAwsProfileSelection } from './aws/profile';
 import { applyAwsRegionChange, promptAwsRegionSelection, syncRegionFromProfile } from './aws/region';
+import { initializeAwsContext, refreshAwsTransportContext } from './aws/credentials';
 import { resetProxyConfig } from './aws/proxyConfig';
 import { resetEmrServerlessService } from './aws/emrServerlessClient';
 import { getSessionPresetStore } from './session/presets';
@@ -28,6 +29,8 @@ let applicationsTree: ReturnType<typeof registerApplicationsTree>;
 let kernelManager: EmrKernelManager;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  await initializeAwsContext();
+
   connectionManager = new ConnectionManager();
   statusBar = new ConnectionStatusBar(connectionManager);
   const presetStore = getSessionPresetStore(context);
@@ -77,8 +80,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         event.affectsConfiguration('http.noProxy')
       ) {
         resetProxyConfig();
-        resetEmrServerlessService();
-        applicationsTree.refresh();
+        void refreshAwsTransportContext().then(() => {
+          resetEmrServerlessService();
+          applicationsTree.refresh();
+        });
       }
     })
   );
