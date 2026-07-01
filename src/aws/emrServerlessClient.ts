@@ -10,6 +10,7 @@ import {
 } from '@aws-sdk/client-emr-serverless';
 import { getConfiguredAwsProfile } from './config';
 import { getCredentialProvider, getDefaultRegion } from './credentials';
+import { getAwsClientTransportConfig } from './proxyConfig';
 import { LivySigV4Client } from '../livy/sigV4Client';
 
 export interface SparkDashboardResult {
@@ -42,6 +43,7 @@ export class EmrServerlessService {
       this.client = new EMRServerlessClient({
         region: this.region,
         credentials: getCredentialProvider(),
+        ...getAwsClientTransportConfig(this.region),
       });
       this.activeProfile = configuredProfile;
     }

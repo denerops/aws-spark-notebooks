@@ -474,8 +474,12 @@
     "@aws-crypto/sha256-js": "^5.2.0",
     "@aws-sdk/client-emr-serverless": "^3.821.0",
     "@aws-sdk/credential-providers": "^3.821.0",
+    "@smithy/node-http-handler": "^4.0.4",
     "@smithy/protocol-http": "^5.1.2",
     "@smithy/shared-ini-file-loader": "^4.0.4",
-    "@smithy/signature-v4": "^5.5.2"
+    "@smithy/signature-v4": "^5.5.2",
+    "http-proxy-agent": "^7.0.2",
+    "https-proxy-agent": "^7.0.6",
+    "undici": "^7.10.0"
   }
 }
