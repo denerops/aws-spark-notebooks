@@ -383,7 +383,7 @@ Releases are automated with [semantic-release](https://semantic-release.gitbook.
 1. Create a feature branch from `main`.
 2. Open a PR with a [Conventional Commits](https://www.conventionalcommits.org/) **title** (squash merge uses the PR title as the commit message).
 3. CI runs typecheck, build, and a packaging smoke test.
-4. Merge to `main` — the release workflow bumps the version, updates `CHANGELOG.md`, builds a `.vsix`, and publishes a [GitHub Release](https://github.com/denerops/aws-spark-notebooks/releases).
+4. Merge to `main` — the release workflow bumps the version, updates `CHANGELOG.md`, builds a `.vsix`, publishes a [GitHub Release](https://github.com/denerops/aws-spark-notebooks/releases), and publishes to the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=denerops.emr-serverless-pyspark).
 
 **Version bumps (from merged PR titles)**
 
@@ -394,7 +394,22 @@ Releases are automated with [semantic-release](https://semantic-release.gitbook.
 | `feat!:` or `BREAKING CHANGE:` | minor while on `0.x` | `feat!: drop legacy kernel API` → `0.1.0` → `0.2.0` |
 | `chore:`, `docs:`, `ci:` | none | No GitHub Release (CI still runs) |
 
-**Install from a release**
+**VS Code Marketplace setup (one-time)**
+
+The release workflow publishes with `vsce` using a repository secret named `VSCE_PAT`.
+
+1. Sign in at [Visual Studio Marketplace](https://marketplace.visualstudio.com/manage) and create the `denerops` publisher if it does not exist yet.
+2. Open [Azure DevOps → Personal access tokens](https://dev.azure.com) → **New Token**.
+3. Set scope **Marketplace → Manage** (publish and manage extensions).
+4. In GitHub: **Settings → Secrets and variables → Actions → New repository secret** → name `VSCE_PAT`, paste the token.
+
+After the secret is set, the next releasable merge to `main` (`feat:` or `fix:`) publishes automatically. Install from the marketplace:
+
+```bash
+code --install-extension denerops.emr-serverless-pyspark
+```
+
+**Install from a GitHub release**
 
 Download the `.vsix` from the GitHub Release assets, then:
 

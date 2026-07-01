@@ -24,6 +24,8 @@ module.exports = {
       '@semantic-release/exec',
       {
         prepareCmd: 'npm run build && npm run package -- --skip-build',
+        publishCmd:
+          '[ -n "$VSCE_PAT" ] && npx @vscode/vsce publish --no-dependencies --packagePath releases/emr-serverless-pyspark-${nextRelease.version}.vsix || echo "Skipping VS Code Marketplace publish: VSCE_PAT not set"',
       },
     ],
     [
