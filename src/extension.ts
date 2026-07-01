@@ -15,6 +15,8 @@ import { ConnectionStatusBar } from './ui/statusBar';
 import { promptEmrConnection } from './ui/connectWizard';
 import { applyAwsProfileChange, promptAwsProfileSelection } from './aws/profile';
 import { applyAwsRegionChange, promptAwsRegionSelection, syncRegionFromProfile } from './aws/region';
+import { resetProxyConfig } from './aws/proxyConfig';
+import { resetEmrServerlessService } from './aws/emrServerlessClient';
 import { getSessionPresetStore } from './session/presets';
 import { registerTableRendererMessaging } from './output/tableCountMessaging';
 import { registerWelcomePage, showWelcomeOnFirstInstall } from './ui/welcomePage';
@@ -65,6 +67,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     refreshSidebar();
     applicationsTree.refresh();
   };
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (
+        event.affectsConfiguration('http.proxy') ||
+        event.affectsConfiguration('http.proxySupport') ||
+        event.affectsConfiguration('http.proxyStrictSSL') ||
+        event.affectsConfiguration('http.noProxy')
+      ) {
+        resetProxyConfig();
+        resetEmrServerlessService();
+        applicationsTree.refresh();
+      }
+    })
+  );
 
   let handlingAwsContextChange = false;
 

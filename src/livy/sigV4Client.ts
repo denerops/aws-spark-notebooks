@@ -3,6 +3,7 @@ import { Sha256 } from '@aws-crypto/sha256-js';
 import { HttpRequest } from '@smithy/protocol-http';
 import type { AwsCredentialIdentity } from '@smithy/types';
 import { getCredentialProvider, getDefaultRegion } from '../aws/credentials';
+import { proxiedFetch } from '../aws/proxyConfig';
 import { livyEndpointUrl } from '../notebook/types';
 import type { LivySessionInfo, LivyStatement, StatementKind } from './types';
 import { parseLivySessionInfo } from './types';
@@ -74,7 +75,7 @@ export class LivySigV4Client {
       }
     }
 
-    const response = await fetch(url, {
+    const response = await proxiedFetch(url, {
       method,
       headers,
       body: bodyText,
