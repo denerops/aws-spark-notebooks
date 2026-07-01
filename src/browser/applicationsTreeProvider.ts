@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { getEmrServerlessService, type LivyApplication } from '../aws/emrServerlessClient';
+import { formatAwsAuthError } from '../aws/credentials';
 import type { ConnectionManager } from '../emr/connectionManager';
 import { formatLivySessionLabel, type LivySessionInfo } from '../livy/types';
 import { LivySigV4Client } from '../livy/sigV4Client';
@@ -104,7 +105,7 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
         }
       }
     } catch (error) {
-      this.loadError = error instanceof Error ? error.message : String(error);
+      this.loadError = formatAwsAuthError(error);
       this.applications = [];
     } finally {
       this.loading = false;
