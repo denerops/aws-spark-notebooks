@@ -1,3 +1,9 @@
+## [0.5.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.4.0...v0.5.0) (2026-07-01)
+
+### Features
+
+* enhance proxy configuration and add new dependencies ([de0aae0](https://github.com/denerops/aws-spark-notebooks/commit/de0aae0305634cc35b25be3b9b42a10c9ebeda65))
+
 ## [0.4.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.3.0...v0.4.0) (2026-06-30)
 
 ### Features
