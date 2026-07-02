@@ -90,6 +90,7 @@ export class GlueLivySession {
     if (!READY_STATES.has(state)) {
       await session.waitUntilReady();
     }
+    await session.bootstrap();
     return session;
   }
 
@@ -171,7 +172,8 @@ export class GlueLivySession {
       const stmt = mapGlueStatementToLivy(raw, options.code);
       options.onStatement?.(stmt);
 
-      if (terminal.has(stmt.state)) {
+      const outputStatus = stmt.output?.status;
+      if (terminal.has(stmt.state) || (outputStatus && terminal.has(outputStatus))) {
         return stmt;
       }
 
@@ -198,12 +200,14 @@ function wrapSqlAsPySpark(code: string): string {
 function mapGlueStatementToLivy(raw: Statement, fallbackCode: string): LivyStatement {
   const output = raw.Output;
   const data = normalizeGlueOutputData(output?.Data);
-  const status = output?.Status ? mapGlueStatementState(output.Status) : 'unknown';
+  const outputStatus = output?.Status ? mapGlueStatementState(output.Status) : undefined;
+  const statementState = raw.State ? mapGlueStatementState(raw.State) : undefined;
+  const status = outputStatus ?? statementState ?? 'unknown';
 
   return {
     id: raw.Id ?? 0,
     code: raw.Code ?? fallbackCode,
-    state: raw.State ? mapGlueStatementState(raw.State) : status,
+    state: status,
     progress: raw.Progress,
     output: output
       ? {
@@ -223,9 +227,15 @@ function normalizeGlueOutputData(data: unknown): Record<string, string> | undefi
     return undefined;
   }
 
+  const record = data as Record<string, unknown>;
   const result: Record<string, string> = {};
-  for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
-    if (value === undefined || value === null) {
+
+  if (typeof record.TextPlain === 'string') {
+    result['text/plain'] = record.TextPlain;
+  }
+
+  for (const [key, value] of Object.entries(record)) {
+    if (key === 'TextPlain' || value === undefined || value === null) {
       continue;
     }
     if (typeof value === 'string') {

@@ -13,6 +13,8 @@ export interface GlueNotebookBinding {
   session: GlueLivySession;
 }
 
+const DEAD_STATES = new Set(['dead', 'error', 'killed', 'shutting_down']);
+
 export class GlueConnectionManager {
   private readonly bindings = new Map<string, GlueNotebookBinding>();
   private readonly connecting = new Map<string, Promise<GlueNotebookBinding>>();
@@ -49,7 +51,11 @@ export class GlueConnectionManager {
         }
         return existing.session;
       }
-      await this.clearNotebookSession(notebook);
+      if (DEAD_STATES.has(existing.session.state)) {
+        await this.clearNotebookSession(notebook);
+      } else {
+        this.bindings.delete(notebook.uri.toString());
+      }
     }
 
     const inFlight = this.connecting.get(key);
@@ -86,8 +92,7 @@ export class GlueConnectionManager {
 
     const binding: GlueNotebookBinding = { region, session };
     this.bindings.set(notebook.uri.toString(), binding);
-    await this.updateNotebookMetadata(notebook, { sessionId });
-    await this.clearEmrMetadata(notebook);
+    await this.setNotebookConnectionMetadata(notebook, { sessionId });
     return binding;
   }
 
@@ -114,10 +119,9 @@ export class GlueConnectionManager {
       session,
     };
     this.bindings.set(notebook.uri.toString(), binding);
-    await this.updateNotebookMetadata(notebook, {
+    await this.setNotebookConnectionMetadata(notebook, {
       sessionId: session.sessionId,
     });
-    await this.clearEmrMetadata(notebook);
     return binding;
   }
 
@@ -277,6 +281,13 @@ export class GlueConnectionManager {
     notebook: vscode.NotebookDocument,
     glueInteractive: GlueNotebookMetadata
   ): Promise<void> {
+    await this.setNotebookConnectionMetadata(notebook, glueInteractive);
+  }
+
+  private async setNotebookConnectionMetadata(
+    notebook: vscode.NotebookDocument,
+    glueInteractive: GlueNotebookMetadata
+  ): Promise<void> {
     const edit = new vscode.WorkspaceEdit();
     const metadata = {
       ...notebook.metadata,
@@ -284,18 +295,6 @@ export class GlueConnectionManager {
         ...((notebook.metadata?.glueInteractive ?? {}) as GlueNotebookMetadata),
         ...glueInteractive,
       },
-    };
-    edit.set(notebook.uri, [vscode.NotebookEdit.updateNotebookMetadata(metadata)]);
-    await vscode.workspace.applyEdit(edit);
-  }
-
-  private async clearEmrMetadata(notebook: vscode.NotebookDocument): Promise<void> {
-    if (!notebook.metadata?.emrServerless) {
-      return;
-    }
-    const edit = new vscode.WorkspaceEdit();
-    const metadata = {
-      ...notebook.metadata,
       emrServerless: {},
     };
     edit.set(notebook.uri, [vscode.NotebookEdit.updateNotebookMetadata(metadata)]);
