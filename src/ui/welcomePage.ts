@@ -40,7 +40,7 @@ export class WelcomePagePanel {
 
     const panel = vscode.window.createWebviewPanel(
       WELCOME_PANEL_TYPE,
-      'EMR Serverless PySpark — Help',
+      'AWS Spark Notebooks — Help',
       vscode.ViewColumn.One,
       {
         enableScripts: true,

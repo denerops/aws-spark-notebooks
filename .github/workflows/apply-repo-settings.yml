@@ -1,0 +1,31 @@
+# One-time or occasional sync of branch protection + Actions approval settings.
+# Requires repository secret GH_ADMIN_PAT (classic PAT or fine-grained token with
+# Administration: read and write, Actions: read and write, Pull requests: read).
+name: Apply Repo Settings
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply GitHub settings
+        env:
+          GH_TOKEN: ${{ secrets.GH_ADMIN_PAT }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::Missing GH_ADMIN_PAT repository secret (admin repo scope required)."
+            exit 1
+          fi
+          chmod +x scripts/apply-github-settings.sh
+          ./scripts/apply-github-settings.sh --owner "${OWNER}" --repo "${REPO}"

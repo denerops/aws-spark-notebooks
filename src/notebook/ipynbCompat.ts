@@ -2,7 +2,7 @@ import { normalizeSource, type SparknbCell, type SparknbDocument, type SparknbOu
 
 export const EMR_KERNELSPEC = {
   name: 'emr-spark',
-  display_name: 'EMR Serverless PySpark',
+  display_name: 'AWS Spark PySpark',
   language: 'python',
 } as const;
 
