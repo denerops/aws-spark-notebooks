@@ -1,3 +1,9 @@
+## [0.7.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.6.0...v0.7.0) (2026-07-02)
+
+### Features
+
+* integrate AWS Glue support and enhance configuration management ([2b75b84](https://github.com/denerops/aws-spark-notebooks/commit/2b75b84acfea778b4ccc97544df2522073864d2b))
+
 ## [0.6.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.5.0...v0.6.0) (2026-07-01)
 
 ### Features

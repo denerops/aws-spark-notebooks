@@ -2,7 +2,7 @@
   "name": "emr-serverless-pyspark",
   "displayName": "AWS Spark Notebooks",
   "description": "Run PySpark and Spark SQL in .sparknb and .ipynb notebooks on EMR Serverless and AWS Glue Interactive Sessions via Apache Livy",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "denerops",
   "license": "MIT",
   "repository": {
@@ -478,149 +478,149 @@
       {
         "title": "EMR Serverless",
         "properties": {
-        "emrServerless.defaultExecutionRoleArn": {
-          "type": "string",
-          "default": "",
-          "description": "IAM role passed to Livy session conf (iam:PassRole required)."
-        },
-        "emrServerless.sessionConfigsDefaults": {
-          "type": "object",
-          "default": {
-            "driverMemory": "4G",
-            "executorMemory": "16G",
-            "executorCores": 4,
-            "numExecutors": 1,
-            "conf": {
-              "emr-serverless.session.executionRoleArn": "arn:aws:iam::123456789012:role/EMRServerlessExecutionRole",
-              "spark.dynamicAllocation.enabled": "false",
-              "spark.executor.instances": "1",
-              "spark.emr-serverless.executor.disk": "40G",
+          "emrServerless.defaultExecutionRoleArn": {
+            "type": "string",
+            "default": "",
+            "description": "IAM role passed to Livy session conf (iam:PassRole required)."
+          },
+          "emrServerless.sessionConfigsDefaults": {
+            "type": "object",
+            "default": {
+              "driverMemory": "4G",
+              "executorMemory": "16G",
+              "executorCores": 4,
+              "numExecutors": 1,
+              "conf": {
+                "emr-serverless.session.executionRoleArn": "arn:aws:iam::123456789012:role/EMRServerlessExecutionRole",
+                "spark.dynamicAllocation.enabled": "false",
+                "spark.executor.instances": "1",
+                "spark.emr-serverless.executor.disk": "40G",
+                "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+                "spark.sql.catalog.spark_catalog.type": "glue"
+              }
+            },
+            "description": "Default Livy POST /sessions body fields when starting a new session."
+          },
+          "emrServerless.statementPollIntervalMs": {
+            "type": "number",
+            "default": 500,
+            "description": "Poll interval when waiting for Livy statement completion."
+          },
+          "emrServerless.sessionStartupTimeoutSeconds": {
+            "type": "number",
+            "default": 600,
+            "description": "Timeout when waiting for a new Livy session to become ready."
+          },
+          "emrServerless.maxRows": {
+            "type": "number",
+            "default": 1000,
+            "description": "Maximum rows to display in DataFrame table outputs."
+          },
+          "emrServerless.dashboardRefreshHintMinutes": {
+            "type": "number",
+            "default": 55,
+            "description": "Hint shown before Spark UI dashboard URLs expire (~1 hour)."
+          },
+          "emrServerless.icebergCatalog.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Merge Iceberg/Glue catalog Spark conf when creating new Livy sessions."
+          },
+          "emrServerless.icebergCatalog.catalogName": {
+            "type": "string",
+            "default": "spark_catalog",
+            "description": "Primary Iceberg catalog name (SparkSessionCatalog on Glue uses spark_catalog)."
+          },
+          "emrServerless.icebergCatalog.sessionConf": {
+            "type": "object",
+            "default": {
               "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
               "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
               "spark.sql.catalog.spark_catalog.type": "glue"
-            }
+            },
+            "description": "Primary Spark session conf merged into every new Livy session."
           },
-          "description": "Default Livy POST /sessions body fields when starting a new session."
-        },
-        "emrServerless.statementPollIntervalMs": {
-          "type": "number",
-          "default": 500,
-          "description": "Poll interval when waiting for Livy statement completion."
-        },
-        "emrServerless.sessionStartupTimeoutSeconds": {
-          "type": "number",
-          "default": 600,
-          "description": "Timeout when waiting for a new Livy session to become ready."
-        },
-        "emrServerless.maxRows": {
-          "type": "number",
-          "default": 1000,
-          "description": "Maximum rows to display in DataFrame table outputs."
-        },
-        "emrServerless.dashboardRefreshHintMinutes": {
-          "type": "number",
-          "default": 55,
-          "description": "Hint shown before Spark UI dashboard URLs expire (~1 hour)."
-        },
-        "emrServerless.icebergCatalog.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Merge Iceberg/Glue catalog Spark conf when creating new Livy sessions."
-        },
-        "emrServerless.icebergCatalog.catalogName": {
-          "type": "string",
-          "default": "spark_catalog",
-          "description": "Primary Iceberg catalog name (SparkSessionCatalog on Glue uses spark_catalog)."
-        },
-        "emrServerless.icebergCatalog.sessionConf": {
-          "type": "object",
-          "default": {
-            "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
-            "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
-            "spark.sql.catalog.spark_catalog.type": "glue"
+          "emrServerless.icebergCatalog.additionalCatalogConf": {
+            "type": "object",
+            "default": {},
+            "description": "Extra spark.sql.catalog.* keys merged at session start (e.g. a named glue_catalog with warehouse)."
           },
-          "description": "Primary Spark session conf merged into every new Livy session."
-        },
-        "emrServerless.icebergCatalog.additionalCatalogConf": {
-          "type": "object",
-          "default": {},
-          "description": "Extra spark.sql.catalog.* keys merged at session start (e.g. a named glue_catalog with warehouse)."
-        },
-        "emrServerless.icebergCatalog.glueCatalog": {
-          "type": "object",
-          "default": {
-            "enabled": false,
-            "name": "glue_catalog",
-            "warehouse": ""
+          "emrServerless.icebergCatalog.glueCatalog": {
+            "type": "object",
+            "default": {
+              "enabled": false,
+              "name": "glue_catalog",
+              "warehouse": ""
+            },
+            "description": "Optional second Iceberg catalog (SparkCatalog + GlueCatalog). Set warehouse to s3://bucket/ and enabled true. Merged at session start alongside spark_catalog."
           },
-          "description": "Optional second Iceberg catalog (SparkCatalog + GlueCatalog). Set warehouse to s3://bucket/ and enabled true. Merged at session start alongside spark_catalog."
-        },
-        "emrServerless.sessionPresets.workspaceFile": {
-          "type": "string",
-          "default": ".vscode/emr-serverless-presets.json",
-          "description": "Path relative to the workspace folder for team-shared session presets (version-controlled)."
-        },
-        "emrServerless.sessionPresets.preferWorkspace": {
-          "type": "boolean",
-          "default": true,
-          "description": "When creating new presets, default to the workspace file when a folder is open."
-        },
-        "emrServerless.awsProfile": {
-          "type": "string",
-          "default": "",
-          "description": "AWS shared config profile for EMR Serverless API calls. Empty uses the default credential chain (AWS_PROFILE environment variable, then default)."
-        },
-        "emrServerless.awsRegion": {
-          "type": "string",
-          "default": "",
-          "description": "AWS region for EMR Serverless API calls. Empty uses the region from the selected AWS profile (~/.aws/config) or AWS_REGION. Change it in the Config sidebar view."
-        }
+          "emrServerless.sessionPresets.workspaceFile": {
+            "type": "string",
+            "default": ".vscode/emr-serverless-presets.json",
+            "description": "Path relative to the workspace folder for team-shared session presets (version-controlled)."
+          },
+          "emrServerless.sessionPresets.preferWorkspace": {
+            "type": "boolean",
+            "default": true,
+            "description": "When creating new presets, default to the workspace file when a folder is open."
+          },
+          "emrServerless.awsProfile": {
+            "type": "string",
+            "default": "",
+            "description": "AWS shared config profile for EMR Serverless API calls. Empty uses the default credential chain (AWS_PROFILE environment variable, then default)."
+          },
+          "emrServerless.awsRegion": {
+            "type": "string",
+            "default": "",
+            "description": "AWS region for EMR Serverless API calls. Empty uses the region from the selected AWS profile (~/.aws/config) or AWS_REGION. Change it in the Config sidebar view."
+          }
         }
       },
       {
         "title": "Glue Interactive Sessions",
         "properties": {
-        "glueInteractive.defaultRoleArn": {
-          "type": "string",
-          "default": "",
-          "description": "IAM role passed to Glue CreateSession (iam:PassRole required)."
-        },
-        "glueInteractive.sessionDefaults": {
-          "type": "object",
-          "default": {
-            "glueVersion": "4.0",
-            "workerType": "G.1X",
-            "numberOfWorkers": 2,
-            "idleTimeout": 30,
-            "pythonVersion": "3",
-            "defaultArguments": {
-              "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
-              "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
-              "spark.sql.catalog.spark_catalog.type": "glue"
-            }
+          "glueInteractive.defaultRoleArn": {
+            "type": "string",
+            "default": "",
+            "description": "IAM role passed to Glue CreateSession (iam:PassRole required)."
           },
-          "description": "Default Glue CreateSession fields when starting a new Livy session."
-        },
-        "glueInteractive.statementPollIntervalMs": {
-          "type": "number",
-          "default": 500,
-          "description": "Poll interval when waiting for Glue RunStatement completion."
-        },
-        "glueInteractive.sessionStartupTimeoutSeconds": {
-          "type": "number",
-          "default": 600,
-          "description": "Timeout when waiting for a new Glue session to reach READY."
-        },
-        "glueInteractive.sessionPresets.workspaceFile": {
-          "type": "string",
-          "default": ".vscode/glue-interactive-presets.json",
-          "description": "Path relative to the workspace folder for team-shared Glue session presets."
-        },
-        "glueInteractive.sessionPresets.preferWorkspace": {
-          "type": "boolean",
-          "default": true,
-          "description": "When creating new Glue presets, default to the workspace file when a folder is open."
-        }
+          "glueInteractive.sessionDefaults": {
+            "type": "object",
+            "default": {
+              "glueVersion": "4.0",
+              "workerType": "G.1X",
+              "numberOfWorkers": 2,
+              "idleTimeout": 30,
+              "pythonVersion": "3",
+              "defaultArguments": {
+                "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+                "spark.sql.catalog.spark_catalog.type": "glue"
+              }
+            },
+            "description": "Default Glue CreateSession fields when starting a new Livy session."
+          },
+          "glueInteractive.statementPollIntervalMs": {
+            "type": "number",
+            "default": 500,
+            "description": "Poll interval when waiting for Glue RunStatement completion."
+          },
+          "glueInteractive.sessionStartupTimeoutSeconds": {
+            "type": "number",
+            "default": 600,
+            "description": "Timeout when waiting for a new Glue session to reach READY."
+          },
+          "glueInteractive.sessionPresets.workspaceFile": {
+            "type": "string",
+            "default": ".vscode/glue-interactive-presets.json",
+            "description": "Path relative to the workspace folder for team-shared Glue session presets."
+          },
+          "glueInteractive.sessionPresets.preferWorkspace": {
+            "type": "boolean",
+            "default": true,
+            "description": "When creating new Glue presets, default to the workspace file when a folder is open."
+          }
         }
       }
     ]
