@@ -2,7 +2,7 @@
   "name": "emr-serverless-pyspark",
   "displayName": "AWS Spark Notebooks",
   "description": "Run PySpark and Spark SQL in .sparknb and .ipynb notebooks on EMR Serverless and AWS Glue Interactive Sessions via Apache Livy",
-  "version": "0.7.4",
+  "version": "0.8.0",
   "publisher": "denerops",
   "license": "MIT",
   "repository": {

@@ -1,3 +1,9 @@
+## [0.8.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.4...v0.8.0) (2026-07-02)
+
+### Features
+
+* add Glue preset tags and job arguments ([67585ef](https://github.com/denerops/aws-spark-notebooks/commit/67585efa807dc68fe8e756ab061e094e4d7b014d))
+
 ## [0.7.4](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.3...v0.7.4) (2026-07-02)
 
 ### Bug Fixes
