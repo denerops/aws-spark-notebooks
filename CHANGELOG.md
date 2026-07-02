@@ -1,3 +1,9 @@
+## [0.7.1](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.0...v0.7.1) (2026-07-02)
+
+### Bug Fixes
+
+* glue notebook attach and cell execution ([ce7f8f7](https://github.com/denerops/aws-spark-notebooks/commit/ce7f8f7e268cb31778bb92e44a0a554159d7caa3))
+
 ## [0.7.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.6.0...v0.7.0) (2026-07-02)
 
 ### Features
