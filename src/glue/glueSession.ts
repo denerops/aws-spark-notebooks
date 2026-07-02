@@ -90,7 +90,6 @@ export class GlueLivySession {
     if (!READY_STATES.has(state)) {
       await session.waitUntilReady();
     }
-    await session.bootstrap();
     return session;
   }
 
@@ -127,6 +126,10 @@ export class GlueLivySession {
       onStatement?: (stmt: LivyStatement) => void;
     }
   ): Promise<LivyStatement> {
+    if (!options?.skipDisplayWrap && !this.bootstrapped) {
+      await this.bootstrap();
+    }
+
     const service = getGlueSessionService();
     const executable = kind === 'sql' ? wrapSqlAsPySpark(code) : code;
     const statementId = await service.runStatement(this.sessionId, executable);
@@ -162,10 +165,17 @@ export class GlueLivySession {
   ): Promise<LivyStatement> {
     const service = getGlueSessionService();
     const terminal = new Set(['available', 'error', 'cancelled']);
+    const timeoutMs = getGlueSessionStartupTimeoutSeconds() * 1000;
+    const started = Date.now();
 
     while (true) {
       if (options.signal?.aborted) {
         throw new Error('Execution cancelled');
+      }
+      if (Date.now() - started > timeoutMs) {
+        throw new Error(
+          `Timed out waiting for Glue statement ${statementId} after ${timeoutMs / 1000}s`
+        );
       }
 
       const raw = await service.getStatement(this.sessionId, statementId);
