@@ -103,6 +103,7 @@ export class ConnectionManager {
     const binding: NotebookBinding = { applicationId, region, session };
     this.bindings.set(notebook.uri.toString(), binding);
     await this.updateNotebookMetadata(notebook, { applicationId, sessionId });
+    await this.clearGlueMetadata(notebook);
     return binding;
   }
 
@@ -138,6 +139,7 @@ export class ConnectionManager {
       applicationId,
       sessionId: session.sessionId,
     });
+    await this.clearGlueMetadata(notebook);
     return binding;
   }
 
@@ -355,5 +357,18 @@ export class ConnectionManager {
     const service = getEmrServerlessService();
     const app = await service.getApplication(applicationId);
     return app?.name ?? applicationId;
+  }
+
+  private async clearGlueMetadata(notebook: vscode.NotebookDocument): Promise<void> {
+    if (!notebook.metadata?.glueInteractive) {
+      return;
+    }
+    const edit = new vscode.WorkspaceEdit();
+    const metadata = {
+      ...notebook.metadata,
+      glueInteractive: {},
+    };
+    edit.set(notebook.uri, [vscode.NotebookEdit.updateNotebookMetadata(metadata)]);
+    await vscode.workspace.applyEdit(edit);
   }
 }

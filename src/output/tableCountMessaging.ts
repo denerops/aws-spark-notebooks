@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ConnectionManager } from '../emr/connectionManager';
+import type { NotebookConnectionHub } from '../platform/connectionHub';
 import { TABLE_COUNT_MARKER } from '../livy/types';
 import { isEmrSparkNotebook } from '../notebook/types';
 import { extractLivyPlainText } from '../output/livyText';
@@ -21,7 +21,7 @@ export interface TableCountResultMessage {
 
 export function registerTableRendererMessaging(
   context: vscode.ExtensionContext,
-  connectionManager: ConnectionManager
+  connectionHub: NotebookConnectionHub
 ): void {
   const messaging = vscode.notebooks.createRendererMessaging(RENDERER_ID);
 
@@ -49,7 +49,7 @@ export function registerTableRendererMessaging(
       };
 
       try {
-        const session = await connectionManager.ensureConnected(notebook);
+        const session = await connectionHub.ensureConnected(notebook);
         const code = buildCountStatement(request.countCode);
         const stmt = await vscode.window.withProgress(
           {

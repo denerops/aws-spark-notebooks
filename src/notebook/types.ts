@@ -12,11 +12,16 @@ export interface SparkNotebookMetadata {
   sessionId?: number;
 }
 
+export interface GlueNotebookMetadata {
+  sessionId?: string;
+}
+
 export interface SparknbDocument {
   nbformat: number;
   nbformat_minor: number;
   metadata: {
     emrServerless?: SparkNotebookMetadata;
+    glueInteractive?: GlueNotebookMetadata;
     [key: string]: unknown;
   };
   cells: SparknbCell[];

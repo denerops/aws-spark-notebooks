@@ -6,42 +6,63 @@ import {
   registerApplicationsActions,
 } from './browser/applicationsActions';
 import { registerSessionPresetsActions } from './browser/sessionPresetsActions';
+import { registerGlueSessionsTree } from './browser/glueSessionsTreeProvider';
+import { registerGlueSessionsActions } from './browser/glueSessionsActions';
+import { registerGluePresetsActions } from './browser/gluePresetsActions';
 import { ConnectionManager } from './emr/connectionManager';
+import { GlueConnectionManager } from './glue/connectionManager';
+import { NotebookConnectionHub } from './platform/connectionHub';
 import { registerKernelManager, type EmrKernelManager } from './notebook/kernelManager';
 import { registerSerializer } from './notebook/serializer';
 import { openEmrSparkNotebook, revealEmrSparkNotebookIfOpen } from './notebook/openNotebook';
 import { isEmrSparkNotebook } from './notebook/types';
 import { ConnectionStatusBar } from './ui/statusBar';
-import { promptEmrConnection } from './ui/connectWizard';
+import { promptSparkConnection } from './ui/connectWizard';
 import { applyAwsProfileChange, promptAwsProfileSelection } from './aws/profile';
+import { runAwsDiagnostics } from './aws/diagnostics';
 import { applyAwsRegionChange, promptAwsRegionSelection, syncRegionFromProfile } from './aws/region';
 import { initializeAwsContext, refreshAwsTransportContext } from './aws/credentials';
 import { resetProxyConfig } from './aws/proxyConfig';
 import { resetEmrServerlessService } from './aws/emrServerlessClient';
+import { resetGlueSessionService } from './glue/glueSessionService';
 import { getSessionPresetStore } from './session/presets';
+import { getGlueSessionPresetStore } from './glue/presets';
 import { registerTableRendererMessaging } from './output/tableCountMessaging';
 import { registerWelcomePage, showWelcomeOnFirstInstall } from './ui/welcomePage';
 
-let connectionManager: ConnectionManager;
+let connectionHub: NotebookConnectionHub;
 let statusBar: ConnectionStatusBar;
 let configTree: ReturnType<typeof registerConfigTree>;
 let applicationsTree: ReturnType<typeof registerApplicationsTree>;
+let glueSessionsTree: ReturnType<typeof registerGlueSessionsTree>;
 let kernelManager: EmrKernelManager;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   await initializeAwsContext();
 
-  connectionManager = new ConnectionManager();
-  statusBar = new ConnectionStatusBar(connectionManager);
-  const presetStore = getSessionPresetStore(context);
-  configTree = registerConfigTree(context, presetStore);
+  const emrConnectionManager = new ConnectionManager();
+  const glueConnectionManager = new GlueConnectionManager();
+  connectionHub = new NotebookConnectionHub(emrConnectionManager, glueConnectionManager);
+
+  statusBar = new ConnectionStatusBar(connectionHub);
+  const emrPresetStore = getSessionPresetStore(context);
+  const gluePresetStore = getGlueSessionPresetStore(context);
+  configTree = registerConfigTree(context, emrPresetStore, gluePresetStore);
 
   registerSerializer(context);
-  kernelManager = registerKernelManager(context, connectionManager, presetStore);
-  applicationsTree = registerApplicationsTree(context, connectionManager);
-  registerApplicationsActions(context, connectionManager, applicationsTree, kernelManager);
-  registerSessionPresetsActions(context, presetStore, configTree);
-  registerTableRendererMessaging(context, connectionManager);
+  kernelManager = registerKernelManager(
+    context,
+    connectionHub,
+    emrPresetStore,
+    gluePresetStore
+  );
+  applicationsTree = registerApplicationsTree(context, emrConnectionManager);
+  glueSessionsTree = registerGlueSessionsTree(context, glueConnectionManager);
+  registerApplicationsActions(context, emrConnectionManager, applicationsTree, kernelManager, connectionHub);
+  registerGlueSessionsActions(context, glueConnectionManager, glueSessionsTree, kernelManager);
+  registerSessionPresetsActions(context, emrPresetStore, configTree);
+  registerGluePresetsActions(context, gluePresetStore, configTree);
+  registerTableRendererMessaging(context, connectionHub);
   registerWelcomePage(context);
 
   context.subscriptions.push(statusBar);
@@ -51,8 +72,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
 
   const refreshAfterAwsContextChange = async (reason: 'profile' | 'region' | 'both'): Promise<void> => {
-    if (connectionManager.listBindings().length > 0) {
-      await connectionManager.disconnectAll();
+    const hadBindings =
+      connectionHub.getEmrManager().listBindings().length > 0 ||
+      connectionHub.getGlueManager().listBindings().length > 0;
+
+    if (hadBindings) {
+      await connectionHub.disconnectAll();
       const message =
         reason === 'both'
           ? 'Disconnected notebook sessions because the AWS profile or region changed.'
@@ -69,6 +94,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await configTree.refreshAwsContext();
     refreshSidebar();
     applicationsTree.refresh();
+    glueSessionsTree.refresh();
   };
 
   context.subscriptions.push(
@@ -82,7 +108,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         resetProxyConfig();
         void refreshAwsTransportContext().then(() => {
           resetEmrServerlessService();
+          resetGlueSessionService();
           applicationsTree.refresh();
+          glueSessionsTree.refresh();
         });
       }
     })
@@ -135,6 +163,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('emrServerless.verifyAwsCredentials', async () => {
+      await runAwsDiagnostics();
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.newNotebook', () =>
       createNewNotebook(context, kernelManager)
     )
@@ -146,7 +180,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!target) {
         const picked = await vscode.window.showOpenDialog({
           canSelectMany: false,
-          openLabel: 'Open with EMR Serverless',
+          openLabel: 'Open Spark Notebook',
           filters: { Notebooks: ['ipynb', 'sparknb'] },
         });
         target = picked?.[0];
@@ -165,26 +199,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('emrServerless.selectKernel', async () => {
       const notebook = vscode.window.activeNotebookEditor?.notebook;
       if (!notebook || !isEmrSparkNotebook(notebook)) {
-        vscode.window.showWarningMessage('Open an EMR Serverless notebook first.');
+        vscode.window.showWarningMessage('Open a Spark notebook first.');
         return;
       }
       await kernelManager.promptKernelSelection(notebook);
       refreshSidebar(notebook);
       applicationsTree.refresh();
+      glueSessionsTree.refresh();
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.connect', async () => {
       const notebook = vscode.window.activeNotebookEditor?.notebook;
-      const connected = await promptEmrConnection(
-        connectionManager,
-        presetStore,
+      const connected = await promptSparkConnection(
+        connectionHub,
+        emrPresetStore,
+        gluePresetStore,
         notebook && isEmrSparkNotebook(notebook) ? notebook : undefined,
         (nb) => {
           kernelManager.updateKernelAppearance(nb);
           refreshSidebar(nb);
           applicationsTree.refresh();
+          glueSessionsTree.refresh();
           notifyDashboardAvailable(nb);
         }
       );
@@ -192,6 +229,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         kernelManager.updateKernelAppearance(notebook);
         refreshSidebar(notebook);
         applicationsTree.refresh();
+        glueSessionsTree.refresh();
         notifyDashboardAvailable(notebook);
       }
     })
@@ -201,7 +239,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('emrServerless.disconnect', async () => {
       const notebook = vscode.window.activeNotebookEditor?.notebook;
       if (notebook && isEmrSparkNotebook(notebook)) {
-        await connectionManager.disconnectNotebook(notebook);
+        const backend = connectionHub.resolveBackend(notebook);
+        if (backend === 'glue') {
+          await connectionHub.getGlueManager().disconnectNotebook(notebook);
+        } else {
+          await connectionHub.getEmrManager().disconnectNotebook(notebook);
+        }
         kernelManager.updateKernelAppearance(notebook);
       }
       refreshSidebar();
@@ -213,9 +256,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!isEmrSparkNotebook(notebook)) {
         return;
       }
-      connectionManager.releaseNotebookBinding(notebook);
+      connectionHub.getEmrManager().releaseNotebookBinding(notebook);
+      connectionHub.getGlueManager().releaseNotebookBinding(notebook);
       refreshSidebar();
       applicationsTree.refresh();
+      glueSessionsTree.refresh();
     })
   );
 
@@ -243,10 +288,14 @@ function notifyDashboardAvailable(notebook?: vscode.NotebookDocument): void {
   if (!nb) {
     return;
   }
-  const session = connectionManager.getSession(nb);
-  if (!session?.dashboardUrl) {
+
+  const emrSession = connectionHub.getEmrManager().getSession(nb);
+  const glueSession = connectionHub.getGlueManager().getSession(nb);
+  const dashboardUrl = emrSession?.dashboardUrl ?? glueSession?.dashboardUrl;
+  if (!dashboardUrl) {
     return;
   }
+
   void vscode.window
     .showInformationMessage(
       'Spark UI link is ready.',
@@ -263,5 +312,5 @@ function notifyDashboardAvailable(notebook?: vscode.NotebookDocument): void {
 }
 
 export async function deactivate(): Promise<void> {
-  await connectionManager?.disconnectAll().catch(() => undefined);
+  await connectionHub?.disconnectAll().catch(() => undefined);
 }

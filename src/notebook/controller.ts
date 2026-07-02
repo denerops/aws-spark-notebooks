@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ConnectionManager } from '../emr/connectionManager';
+import type { NotebookConnectionHub } from '../platform/connectionHub';
 import { getExtensionConfig, getMaxRows } from '../aws/config';
 import {
   cellConfiguresSparkCatalog,
@@ -27,7 +27,7 @@ export class SparknbController implements vscode.Disposable {
   private _executionOrder = 0;
   private readonly catalogWarningShown = new Set<string>();
 
-  constructor(private readonly connectionManager: ConnectionManager) {}
+  constructor(private readonly connectionHub: NotebookConnectionHub) {}
 
   dispose(): void {
     // Execution is owned by EmrKernelManager controllers.
@@ -103,10 +103,10 @@ export class SparknbController implements vscode.Disposable {
     progress.updatePhase('Starting');
 
     try {
-      progress.updatePhase('Connecting to Livy session');
-      const session = await this.connectionManager.ensureConnected(notebook);
+      progress.updatePhase('Connecting to Spark session');
+      const session = await this.connectionHub.ensureConnected(notebook);
       if (!session.dashboardUrl) {
-        await this.connectionManager.refreshDashboard(session).catch(() => undefined);
+        await this.connectionHub.refreshDashboard(session).catch(() => undefined);
       }
       progress.setSparkUiUrl(session.dashboardUrl);
       progress.updatePhase('Submitting statement');
