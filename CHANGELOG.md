@@ -1,3 +1,33 @@
+## [0.7.4](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.3...v0.7.4) (2026-07-02)
+
+### Bug Fixes
+
+* keep Glue session attached across cell runs ([cd60c1c](https://github.com/denerops/aws-spark-notebooks/commit/cd60c1c22253ab2694c10f0f18b66944daf9d85a))
+
+## [0.7.3](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.2...v0.7.3) (2026-07-02)
+
+### Bug Fixes
+
+* detect Glue statement completion correctly ([387cb92](https://github.com/denerops/aws-spark-notebooks/commit/387cb92ce2d7563988930f29a3a18855848776a8))
+
+## [0.7.2](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.1...v0.7.2) (2026-07-02)
+
+### Bug Fixes
+
+* speed up glue session attach ([6620a2a](https://github.com/denerops/aws-spark-notebooks/commit/6620a2a89d57bfcc788e66060e3daf3752c7a4cd))
+
+## [0.7.1](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.0...v0.7.1) (2026-07-02)
+
+### Bug Fixes
+
+* glue notebook attach and cell execution ([ce7f8f7](https://github.com/denerops/aws-spark-notebooks/commit/ce7f8f7e268cb31778bb92e44a0a554159d7caa3))
+
+## [0.7.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.6.0...v0.7.0) (2026-07-02)
+
+### Features
+
+* integrate AWS Glue support and enhance configuration management ([2b75b84](https://github.com/denerops/aws-spark-notebooks/commit/2b75b84acfea778b4ccc97544df2522073864d2b))
+
 ## [0.6.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.5.0...v0.6.0) (2026-07-01)
 
 ### Features
