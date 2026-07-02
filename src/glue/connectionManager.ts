@@ -54,7 +54,7 @@ export class GlueConnectionManager {
       if (DEAD_STATES.has(existing.session.state)) {
         await this.clearNotebookSession(notebook);
       } else {
-        this.bindings.delete(notebook.uri.toString());
+        return existing.session;
       }
     }
 

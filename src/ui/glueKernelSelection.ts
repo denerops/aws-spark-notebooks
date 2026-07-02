@@ -25,7 +25,11 @@ export function isGlueNotebookConnected(
   notebook: vscode.NotebookDocument
 ): boolean {
   const binding = connectionManager.getBinding(notebook);
-  return Boolean(binding?.session.isReady);
+  if (binding?.session.isReady) {
+    return true;
+  }
+  const meta = connectionManager.resolveNotebookMetadata(notebook);
+  return Boolean(meta.sessionId);
 }
 
 export async function selectGlueKernel(
