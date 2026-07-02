@@ -88,11 +88,11 @@ export class GlueConnectionManager {
   ): Promise<GlueNotebookBinding> {
     const region = await getDefaultRegion();
     const session = await GlueLivySession.attach(region, sessionId);
-    await this.refreshDashboard(session);
 
     const binding: GlueNotebookBinding = { region, session };
     this.bindings.set(notebook.uri.toString(), binding);
     await this.setNotebookConnectionMetadata(notebook, { sessionId });
+    void this.refreshDashboard(session).catch(() => undefined);
     return binding;
   }
 

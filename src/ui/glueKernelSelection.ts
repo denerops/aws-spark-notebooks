@@ -60,7 +60,7 @@ export async function selectGlueKernel(
       return false;
     }
 
-    const activeSessions = sessions.filter((s) => s.status === 'READY' || s.status === 'PROVISIONING');
+    const activeSessions = sessions.filter((s) => s.status === 'READY');
 
     const sessionItems: SessionPickItem[] = activeSessions.map((s) => {
       const sessionLabel = formatGlueSessionLabel(s);
