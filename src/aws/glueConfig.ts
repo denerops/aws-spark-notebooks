@@ -8,6 +8,7 @@ export interface GlueSessionConfigDefaults {
   timeout?: number;
   pythonVersion?: string;
   defaultArguments?: Record<string, string>;
+  tags?: Record<string, string>;
 }
 
 export function getGlueExtensionConfig() {

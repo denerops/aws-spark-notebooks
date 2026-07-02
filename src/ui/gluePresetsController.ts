@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { GlueSessionPreset, GlueSessionPresetStore } from '../glue/presets';
 import { DEFAULT_GLUE_WORKSPACE_PRESETS_FILE } from '../glue/presets';
-import { getSparkConfSuggestionsForEditor } from '../session/sparkConfSuggestions';
+import { getGlueDefaultArgumentSuggestionsForEditor } from '../glue/glueArgumentSuggestions';
 import { assertValidPythonPackageSpecs, normalizePythonPackages } from '../session/pythonPackages';
 import { assertValidSparkPackageSpecs, normalizeSparkPackages } from '../session/sparkPackages';
 import { escapeHtml, renderWebviewPage } from './webviewDesignSystem';
@@ -62,6 +62,7 @@ export class GluePresetsController {
             pythonPackages: normalizedPackages,
             sparkPackages: normalizedSparkPackages,
             connections: (preset.connections ?? []).filter(Boolean),
+            tags: { ...(preset.tags ?? {}) },
           },
           source
         );
@@ -126,7 +127,7 @@ export function renderGluePresetEditorHtml(preset: GlueSessionPreset | undefined
   }
 
   const presetJson = JSON.stringify(preset);
-  const sparkConfSuggestionsJson = JSON.stringify(getSparkConfSuggestionsForEditor());
+  const sparkConfSuggestionsJson = JSON.stringify(getGlueDefaultArgumentSuggestionsForEditor());
   const packageSpecPatternJson = JSON.stringify('^[^\\s;&|`$()]+$');
   const workerTypeOptions = WORKER_TYPES.map(
     (type) =>
@@ -206,10 +207,17 @@ export function renderGluePresetEditorHtml(preset: GlueSessionPreset | undefined
   </section>
 
   <section class="settings-group">
-    <h2>Default arguments (Spark conf)</h2>
+    <h2>Session tags</h2>
+    <div id="tagRows" class="kv-list"></div>
+    <button type="button" class="secondary" id="addTagRow">Add tag</button>
+    <p class="hint">Key-value tags passed to Glue CreateSession (for cost allocation, ownership, etc.).</p>
+  </section>
+
+  <section class="settings-group">
+    <h2>Default arguments</h2>
     <div id="defaultArgRows" class="kv-list"></div>
     <button type="button" class="secondary" id="addDefaultArgRow">Add entry</button>
-    <p class="hint">Glue DefaultArguments merged when the Livy session starts.</p>
+    <p class="hint">Glue DefaultArguments: Spark conf keys and Glue job args such as <code>--enable-glue-datacatalog</code>.</p>
   </section>
 
   <section class="settings-group">
@@ -246,6 +254,7 @@ export function renderGluePresetEditorHtml(preset: GlueSessionPreset | undefined
       idleTimeout: document.getElementById('idleTimeout'),
       timeout: document.getElementById('timeout'),
       connectionRows: document.getElementById('connectionRows'),
+      tagRows: document.getElementById('tagRows'),
       defaultArgRows: document.getElementById('defaultArgRows'),
       sparkPackageRows: document.getElementById('sparkPackageRows'),
       pythonPackageRows: document.getElementById('pythonPackageRows'),
@@ -401,6 +410,59 @@ export function renderGluePresetEditorHtml(preset: GlueSessionPreset | undefined
         return;
       }
       for (const [key, value] of entries) addDefaultArgRow(key, value, false);
+    }
+
+    function readTags() {
+      const rows = els.tagRows.querySelectorAll('.kv-row');
+      const tags = {};
+      const duplicates = new Set();
+      for (const row of rows) {
+        const key = row.querySelector('.kv-key').value.trim();
+        const value = row.querySelector('.kv-value').value.trim();
+        if (!key) continue;
+        if (Object.prototype.hasOwnProperty.call(tags, key)) duplicates.add(key);
+        tags[key] = value;
+      }
+      if (duplicates.size > 0) {
+        alert('Duplicate tag keys: ' + Array.from(duplicates).join(', '));
+        return null;
+      }
+      return tags;
+    }
+
+    function addTagRow(key = '', value = '', focusKey = false) {
+      const row = document.createElement('div');
+      row.className = 'kv-row';
+      const keyWrap = document.createElement('div');
+      keyWrap.className = 'kv-key-wrap';
+      const keyInput = document.createElement('input');
+      keyInput.type = 'text';
+      keyInput.className = 'kv-key';
+      keyInput.placeholder = 'e.g. team';
+      keyInput.value = key;
+      keyWrap.appendChild(keyInput);
+      const valueInput = document.createElement('input');
+      valueInput.type = 'text';
+      valueInput.className = 'kv-value';
+      valueInput.placeholder = 'e.g. data-platform';
+      valueInput.value = value;
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn-icon remove-row';
+      removeBtn.title = 'Remove tag';
+      removeBtn.textContent = '✕';
+      removeBtn.onclick = () => row.remove();
+      row.appendChild(keyWrap);
+      row.appendChild(valueInput);
+      row.appendChild(removeBtn);
+      els.tagRows.appendChild(row);
+      if (focusKey) keyInput.focus();
+    }
+
+    function renderTagRows(tags) {
+      els.tagRows.innerHTML = '';
+      const entries = Object.entries(tags || {}).sort(([a], [b]) => a.localeCompare(b));
+      for (const [key, value] of entries) addTagRow(key, value, false);
     }
 
     function readDefaultArguments() {
@@ -565,6 +627,7 @@ export function renderGluePresetEditorHtml(preset: GlueSessionPreset | undefined
       els.idleTimeout.value = current.idleTimeout ?? 30;
       els.timeout.value = current.timeout ?? '';
       renderConnectionRows(current.connections || []);
+      renderTagRows(current.tags || {});
       renderDefaultArgRows(current.defaultArguments || {});
       renderSparkPackageRows(current.sparkPackages || []);
       renderPythonPackageRows(current.pythonPackages || []);
@@ -573,6 +636,8 @@ export function renderGluePresetEditorHtml(preset: GlueSessionPreset | undefined
     function readForm() {
       const defaultArguments = readDefaultArguments();
       if (defaultArguments === null) return null;
+      const tags = readTags();
+      if (tags === null) return null;
       const sparkPackages = readSparkPackages();
       if (sparkPackages === null) return null;
       const pythonPackages = readPythonPackages();
@@ -590,12 +655,14 @@ export function renderGluePresetEditorHtml(preset: GlueSessionPreset | undefined
         idleTimeout: Number(els.idleTimeout.value) || 30,
         timeout: timeoutVal ? Number(timeoutVal) : undefined,
         connections: readConnections(),
+        tags,
         defaultArguments,
         sparkPackages,
         pythonPackages,
       };
     }
 
+    document.getElementById('addTagRow').onclick = () => addTagRow('', '', true);
     document.getElementById('addDefaultArgRow').onclick = () => addDefaultArgRow('', '', true);
     document.getElementById('addConnectionRow').onclick = () => addConnectionRow('', true);
     document.getElementById('addSparkPackageRow').onclick = () => addSparkPackageRow('', true);
@@ -615,7 +682,7 @@ export function renderGluePresetEditorHtml(preset: GlueSessionPreset | undefined
 
 function gluePresetSourceSubtitle(preset: GlueSessionPreset): string {
   const base =
-    'Glue workers, IAM role, default arguments, connections, Spark packages, and Python packages for new Livy sessions.';
+    'Glue workers, IAM role, default arguments, tags, connections, Spark packages, and Python packages for new Livy sessions.';
   if (preset.source === 'workspace') {
     return `Team preset — stored in ${DEFAULT_GLUE_WORKSPACE_PRESETS_FILE} (committed with the repo). ${base}`;
   }

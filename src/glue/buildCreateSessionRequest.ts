@@ -35,5 +35,6 @@ function buildFromPreset(
     pythonVersion: preset.pythonVersion,
     defaultArguments,
     connections: preset.connections,
+    tags: preset.tags,
   };
 }

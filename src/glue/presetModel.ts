@@ -24,8 +24,10 @@ export interface GlueSessionPreset {
   idleTimeout?: number;
   timeout?: number;
   pythonVersion?: string;
-  /** Glue DefaultArguments (Spark conf and job args). */
+  /** Glue DefaultArguments (Spark conf and Glue job args). */
   defaultArguments: Record<string, string>;
+  /** Tags applied to the Glue session on CreateSession. */
+  tags?: Record<string, string>;
   /** Glue connection names. */
   connections?: string[];
   /** PyPI package specs installed when the session starts. */
@@ -56,6 +58,7 @@ export function normalizeGluePreset(preset: GlueSessionPreset, index = 0): GlueS
     pythonVersion: preset.pythonVersion ?? '3',
     sessionDescription: preset.sessionDescription?.trim() || undefined,
     defaultArguments: { ...(preset.defaultArguments ?? {}) },
+    tags: { ...(preset.tags ?? {}) },
     connections: preset.connections?.filter(Boolean),
     pythonPackages: normalizePythonPackages(preset.pythonPackages),
     sparkPackages: normalizeSparkPackages(preset.sparkPackages),
@@ -67,8 +70,14 @@ export function buildDefaultGlueArguments(): Record<string, string> {
   const fromSettings = { ...(defaults.defaultArguments ?? {}) };
   return {
     ...getIcebergCatalogConfig(),
+    '--enable-glue-datacatalog': 'true',
     ...fromSettings,
   };
+}
+
+export function buildDefaultGlueTags(): Record<string, string> {
+  const defaults = getGlueSessionConfigDefaults();
+  return { ...(defaults.tags ?? {}) };
 }
 
 export function buildDefaultGluePreset(): GlueSessionPreset {
@@ -86,6 +95,7 @@ export function buildDefaultGluePreset(): GlueSessionPreset {
     timeout: defaults.timeout,
     pythonVersion: defaults.pythonVersion ?? '3',
     defaultArguments: buildDefaultGlueArguments(),
+    tags: buildDefaultGlueTags(),
     pythonPackages: [],
     sparkPackages: [],
     connections: [],
