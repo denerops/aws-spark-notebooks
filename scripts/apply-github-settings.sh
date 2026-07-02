@@ -93,8 +93,8 @@ apply_branch_protection() {
   "required_status_checks": {
     "strict": true,
     "checks": [
-      { "context": "CI / verify" },
-      { "context": "PR Title / semantic-pull-request" }
+      { "context": "CI / verify (pull_request)" },
+      { "context": "PR Title / semantic-pull-request (pull_request)" }
     ]
   },
   "enforce_admins": false,
@@ -197,8 +197,8 @@ cat <<EOF
 Done.
 
 Merge to main is now blocked until these checks pass:
-  - CI / verify
-  - PR Title / semantic-pull-request
+  - CI / verify (pull_request)
+  - PR Title / semantic-pull-request (pull_request)
 
 Notes on workflow approval:
   - Repo members with prior merged contributions should no longer need approval on every PR.
