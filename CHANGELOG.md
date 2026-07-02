@@ -1,3 +1,9 @@
+## [0.7.4](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.3...v0.7.4) (2026-07-02)
+
+### Bug Fixes
+
+* keep Glue session attached across cell runs ([cd60c1c](https://github.com/denerops/aws-spark-notebooks/commit/cd60c1c22253ab2694c10f0f18b66944daf9d85a))
+
 ## [0.7.3](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.2...v0.7.3) (2026-07-02)
 
 ### Bug Fixes
