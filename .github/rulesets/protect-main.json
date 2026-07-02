@@ -15,8 +15,8 @@
         "strict_required_status_checks_policy": true,
         "do_not_enforce_on_create": false,
         "required_status_checks": [
-          { "context": "CI / verify (pull_request)" },
-          { "context": "PR Title / semantic-pull-request (pull_request)" }
+          { "context": "verify" },
+          { "context": "semantic-pull-request" }
         ]
       }
     },

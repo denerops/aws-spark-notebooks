@@ -413,10 +413,10 @@ npm run package -- --pre-release
 
 Pull requests to `main` run:
 
-| Check | Workflow |
-|-------|----------|
-| `CI / verify (pull_request)` | Typecheck, build, package smoke test |
-| `PR Title / semantic-pull-request (pull_request)` | Conventional Commits PR title |
+| Check | Workflow job |
+|-------|----------------|
+| `verify` | CI — typecheck, build, package smoke test |
+| `semantic-pull-request` | PR Title — Conventional Commits PR title |
 
 **Block merge until checks pass** — branch protection must be enabled on GitHub (not enforced by workflow files alone). After merging the repo-settings changes, run once:
 
@@ -428,7 +428,8 @@ Or add a repository secret `GH_ADMIN_PAT` (admin + Actions scope) and run the **
 
 This configures:
 
-- Required status checks on `main` (`CI / verify (pull_request)`, `PR Title / semantic-pull-request (pull_request)`)
+- Required status checks on `main` (`verify`, `semantic-pull-request`) via repository ruleset
+- Legacy branch protection removed to avoid duplicate required checks
 - The least restrictive workflow approval policy available via API (`first_time_contributors_new_to_github`)
 
 **Workflow approval prompts:** GitHub may still ask you to click **Approve and run** when a PR modifies files under `.github/workflows/`. That is a platform security control and cannot be fully disabled. Same-repo PRs from contributors who already have merged work should otherwise run automatically.

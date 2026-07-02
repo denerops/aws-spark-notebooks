@@ -8,9 +8,10 @@
 #   ./scripts/apply-github-settings.sh --owner denerops --repo aws-spark-notebooks
 #
 # What this configures:
-#   1. Branch protection on main — merge blocked until CI and PR Title checks pass
-#   2. Most permissive workflow approval policy allowed by GitHub's API
-#   3. Private-repo fork PR workflows without maintainer approval (if applicable)
+#   1. Repository ruleset on main — merge blocked until CI job checks pass
+#   2. Removes legacy branch protection (avoids duplicate required checks)
+#   3. Most permissive workflow approval policy allowed by GitHub's API
+#   4. Private-repo fork PR workflows without maintainer approval (if applicable)
 set -euo pipefail
 
 OWNER=""
@@ -18,7 +19,7 @@ REPO=""
 DRY_RUN=false
 
 usage() {
-  sed -n '2,12p' "$0"
+  sed -n '2,14p' "$0"
   echo "Options:"
   echo "  --owner OWNER   GitHub owner (default: from git remote origin)"
   echo "  --repo REPO     GitHub repo name (default: from git remote origin)"
@@ -86,39 +87,17 @@ run_gh() {
   fi
 }
 
-apply_branch_protection() {
-  local payload
-  payload="$(cat <<'EOF'
-{
-  "required_status_checks": {
-    "strict": true,
-    "checks": [
-      { "context": "CI / verify (pull_request)" },
-      { "context": "PR Title / semantic-pull-request (pull_request)" }
-    ]
-  },
-  "enforce_admins": false,
-  "required_pull_request_reviews": null,
-  "restrictions": null,
-  "required_linear_history": false,
-  "allow_force_pushes": false,
-  "allow_deletions": false,
-  "block_creations": false,
-  "required_conversation_resolution": false
-}
-EOF
-)"
-
-  echo "→ Require status checks on main before merge"
+remove_legacy_branch_protection() {
+  echo "→ Remove legacy branch protection on main (ruleset handles enforcement)"
   if [[ "$DRY_RUN" == true ]]; then
-    echo "$payload" | (command -v jq >/dev/null && jq . || cat)
     return
   fi
 
-  echo "$payload" | gh api \
-    --method PUT \
-    "repos/${REPO_SLUG}/branches/main/protection" \
-    --input -
+  if gh api "repos/${REPO_SLUG}/branches/main/protection" >/dev/null 2>&1; then
+    gh api --method DELETE "repos/${REPO_SLUG}/branches/main/protection"
+  else
+    echo "  (no legacy branch protection configured)"
+  fi
 }
 
 apply_ruleset() {
@@ -186,7 +165,7 @@ apply_workflow_permissions() {
     -F can_approve_pull_request_reviews=true
 }
 
-apply_branch_protection
+remove_legacy_branch_protection
 apply_ruleset
 apply_workflow_approval_policy
 apply_private_fork_workflow_policy
@@ -196,14 +175,14 @@ cat <<EOF
 
 Done.
 
-Merge to main is now blocked until these checks pass:
-  - CI / verify (pull_request)
-  - PR Title / semantic-pull-request (pull_request)
+Merge to main is now blocked until these GitHub Actions job checks pass:
+  - verify
+  - semantic-pull-request
 
-Notes on workflow approval:
-  - Repo members with prior merged contributions should no longer need approval on every PR.
-  - GitHub may still require one manual "Approve and run" when a PR changes files under .github/workflows/.
-  - PRs from forks can still require approval depending on org policy.
+Notes:
+  - Required check names must match workflow job ids (not the UI label with workflow prefix).
+  - Legacy branch protection was removed to avoid duplicate "Expected" checks.
+  - GitHub may still require one manual "Approve and run" when a PR changes .github/workflows/.
 
-Verify in GitHub: Settings → Branches → main protection rules.
+Verify in GitHub: Settings → Rules → Rulesets → Protect main.
 EOF
