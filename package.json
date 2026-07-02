@@ -51,7 +51,7 @@
     "notebooks": [
       {
         "type": "emr-spark",
-        "displayName": "EMR Serverless PySpark Notebook",
+        "displayName": "AWS Spark Notebook",
         "selector": [
           {
             "filenamePattern": "*.sparknb"

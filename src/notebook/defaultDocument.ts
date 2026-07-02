@@ -31,7 +31,7 @@ export function createStarterSparknbDocument(
       {
         cell_type: 'markdown',
         source: [
-          '# EMR Serverless PySpark Notebook\n',
+          '# AWS Spark Notebook\n',
           '\n',
           'Connect to a Livy session from the EMR Serverless sidebar, then run Python and Spark SQL cells.\n',
         ],

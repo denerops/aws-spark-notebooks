@@ -2,7 +2,11 @@ name: PR Title
 
 on:
   pull_request:
+    branches: [main]
     types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
 
 jobs:
   semantic-pull-request:
