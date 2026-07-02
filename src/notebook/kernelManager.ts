@@ -155,6 +155,23 @@ export class EmrKernelManager implements vscode.Disposable {
       return;
     }
 
+    const glueMeta = (notebook.metadata?.glueInteractive ?? {}) as { sessionId?: string };
+    if (glueMeta.sessionId) {
+      const sessionLabel = formatGlueSessionLabel({ id: glueMeta.sessionId });
+      this.mainController.label = 'Glue Interactive PySpark';
+      this.mainController.description = sessionLabel;
+      this.mainController.detail = 'attached';
+      this.mainController.updateNotebookAffinity(
+        notebook,
+        vscode.NotebookControllerAffinity.Preferred
+      );
+      this.selectController.updateNotebookAffinity(
+        notebook,
+        vscode.NotebookControllerAffinity.Default
+      );
+      return;
+    }
+
     const emrBinding = this.connectionHub.getEmrManager().getBinding(notebook);
     if (emrBinding?.session.isReady) {
       const shortApp =
@@ -168,6 +185,30 @@ export class EmrKernelManager implements vscode.Disposable {
       this.mainController.label = 'EMR Serverless PySpark';
       this.mainController.description = `${shortApp} · ${sessionLabel}`;
       this.mainController.detail = emrBinding.session.state;
+      this.mainController.updateNotebookAffinity(
+        notebook,
+        vscode.NotebookControllerAffinity.Preferred
+      );
+      this.selectController.updateNotebookAffinity(
+        notebook,
+        vscode.NotebookControllerAffinity.Default
+      );
+      return;
+    }
+
+    const emrMeta = (notebook.metadata?.emrServerless ?? {}) as {
+      applicationId?: string;
+      sessionId?: number;
+    };
+    if (emrMeta.applicationId && emrMeta.sessionId !== undefined) {
+      const shortApp =
+        emrMeta.applicationId.length > 16
+          ? `${emrMeta.applicationId.slice(0, 12)}…`
+          : emrMeta.applicationId;
+      const sessionLabel = formatLivySessionLabel({ id: emrMeta.sessionId });
+      this.mainController.label = 'EMR Serverless PySpark';
+      this.mainController.description = `${shortApp} · ${sessionLabel}`;
+      this.mainController.detail = 'attached';
       this.mainController.updateNotebookAffinity(
         notebook,
         vscode.NotebookControllerAffinity.Preferred
@@ -196,17 +237,19 @@ export class EmrKernelManager implements vscode.Disposable {
     cells: vscode.NotebookCell[],
     notebook: vscode.NotebookDocument
   ): Promise<void> {
-    const connected = await this.promptKernelSelection(notebook);
-    if (!connected) {
-      if (cells.length > 0) {
-        await this.sparkController.failCells(
-          cells,
-          notebook,
-          this.selectController,
-          'No Spark session selected. Use the kernel picker to select an EMR Serverless or Glue Interactive session.'
-        );
+    if (!this.isNotebookConnected(notebook)) {
+      const connected = await this.promptKernelSelection(notebook);
+      if (!connected) {
+        if (cells.length > 0) {
+          await this.sparkController.failCells(
+            cells,
+            notebook,
+            this.selectController,
+            'No Spark session selected. Use the kernel picker to select an EMR Serverless or Glue Interactive session.'
+          );
+        }
+        return;
       }
-      return;
     }
 
     this.updateKernelAppearance(notebook);
@@ -214,6 +257,7 @@ export class EmrKernelManager implements vscode.Disposable {
     if (cells.length > 0) {
       // Must execute with the controller that received the run request (selectController).
       await this.sparkController.executeCells(cells, notebook, this.selectController);
+      this.updateKernelAppearance(notebook);
     }
   }
 

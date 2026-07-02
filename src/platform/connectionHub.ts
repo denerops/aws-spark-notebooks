@@ -99,7 +99,24 @@ export class NotebookConnectionHub {
       return true;
     }
     const emrSession = this.emr.getSession(notebook);
-    return Boolean(emrSession?.isReady);
+    if (emrSession?.isReady) {
+      return true;
+    }
+
+    const glueMeta = notebook.metadata?.glueInteractive as { sessionId?: string } | undefined;
+    if (glueMeta?.sessionId) {
+      return true;
+    }
+
+    const emrMeta = notebook.metadata?.emrServerless as {
+      applicationId?: string;
+      sessionId?: number;
+    } | undefined;
+    if (emrMeta?.applicationId && emrMeta.sessionId !== undefined) {
+      return true;
+    }
+
+    return false;
   }
 
   async ensureConnected(notebook: vscode.NotebookDocument): Promise<SparkSessionHandle> {
