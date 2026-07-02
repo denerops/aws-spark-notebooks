@@ -1,3 +1,9 @@
+## [0.7.2](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.1...v0.7.2) (2026-07-02)
+
+### Bug Fixes
+
+* speed up glue session attach ([6620a2a](https://github.com/denerops/aws-spark-notebooks/commit/6620a2a89d57bfcc788e66060e3daf3752c7a4cd))
+
 ## [0.7.1](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.0...v0.7.1) (2026-07-02)
 
 ### Bug Fixes
