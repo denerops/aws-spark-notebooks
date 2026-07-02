@@ -14,6 +14,7 @@ export {
   createGluePresetId,
   buildDefaultGluePreset,
   buildDefaultGlueArguments,
+  buildDefaultGlueTags,
   normalizeGluePreset,
 } from './presetModel';
 

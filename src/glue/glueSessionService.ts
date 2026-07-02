@@ -29,6 +29,7 @@ export interface CreateGlueSessionInput {
   pythonVersion?: string;
   defaultArguments?: Record<string, string>;
   connections?: string[];
+  tags?: Record<string, string>;
 }
 
 export class GlueInteractiveSessionService {
@@ -122,6 +123,7 @@ export class GlueInteractiveSessionService {
         ...(input.connections?.length
           ? { Connections: { Connections: input.connections } }
           : {}),
+        ...(input.tags && Object.keys(input.tags).length > 0 ? { Tags: input.tags } : {}),
         RequestOrigin: GLUE_REQUEST_ORIGIN,
       })
     );
