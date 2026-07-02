@@ -4,7 +4,11 @@ import {
   getGlueStatementPollIntervalMs,
 } from '../aws/glueConfig';
 import { getGlueSessionService } from './glueSessionService';
-import { mapGlueStatementState, mapGlueStatusToLivyState } from './types';
+import {
+  isGlueStatementTerminal,
+  mapGlueStatusToLivyState,
+  resolveGlueStatementStatus,
+} from './types';
 import type { LivyStatement, StatementKind } from '../livy/types';
 import { EMR_DISPLAY_BOOTSTRAP } from '../livy/types';
 
@@ -75,7 +79,6 @@ export class GlueLivySession {
       summary.description
     );
     await session.waitUntilReady();
-    await session.bootstrap();
     return session;
   }
 
@@ -164,7 +167,6 @@ export class GlueLivySession {
     }
   ): Promise<LivyStatement> {
     const service = getGlueSessionService();
-    const terminal = new Set(['available', 'error', 'cancelled']);
     const timeoutMs = getGlueSessionStartupTimeoutSeconds() * 1000;
     const started = Date.now();
 
@@ -182,8 +184,7 @@ export class GlueLivySession {
       const stmt = mapGlueStatementToLivy(raw, options.code);
       options.onStatement?.(stmt);
 
-      const outputStatus = stmt.output?.status;
-      if (terminal.has(stmt.state) || (outputStatus && terminal.has(outputStatus))) {
+      if (isGlueStatementTerminal(raw)) {
         return stmt;
       }
 
@@ -210,9 +211,7 @@ function wrapSqlAsPySpark(code: string): string {
 function mapGlueStatementToLivy(raw: Statement, fallbackCode: string): LivyStatement {
   const output = raw.Output;
   const data = normalizeGlueOutputData(output?.Data);
-  const outputStatus = output?.Status ? mapGlueStatementState(output.Status) : undefined;
-  const statementState = raw.State ? mapGlueStatementState(raw.State) : undefined;
-  const status = outputStatus ?? statementState ?? 'unknown';
+  const status = resolveGlueStatementStatus(raw);
 
   return {
     id: raw.Id ?? 0,

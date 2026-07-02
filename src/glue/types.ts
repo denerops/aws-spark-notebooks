@@ -7,6 +7,8 @@ export type GlueSessionStatus =
   | 'STOPPED'
   | string;
 
+import type { Statement } from '@aws-sdk/client-glue';
+
 export type GlueStatementState =
   | 'WAITING'
   | 'RUNNING'
@@ -15,6 +17,8 @@ export type GlueStatementState =
   | 'CANCELLED'
   | 'ERROR'
   | string;
+
+const TERMINAL_STATEMENT_STATES = new Set(['available', 'error', 'cancelled']);
 
 export interface GlueSessionSummary {
   id: string;
@@ -53,6 +57,39 @@ export function mapGlueStatusToLivyState(status: GlueSessionStatus): string {
 
 export function mapGlueStatementState(state: GlueStatementState): string {
   return state.toLowerCase();
+}
+
+/** Glue uses Statement.State for progress and Output.Status of `ok`/`error` when finished. */
+export function isGlueStatementTerminal(raw: Statement): boolean {
+  const statementState = raw.State ? mapGlueStatementState(raw.State) : undefined;
+  const outputStatus = raw.Output?.Status ? mapGlueStatementState(raw.Output.Status) : undefined;
+
+  if (statementState && TERMINAL_STATEMENT_STATES.has(statementState)) {
+    return true;
+  }
+  if (outputStatus === 'ok' || outputStatus === 'error') {
+    return true;
+  }
+  return Boolean(outputStatus && TERMINAL_STATEMENT_STATES.has(outputStatus));
+}
+
+export function resolveGlueStatementStatus(raw: Statement): string {
+  const statementState = raw.State ? mapGlueStatementState(raw.State) : undefined;
+  const outputStatus = raw.Output?.Status ? mapGlueStatementState(raw.Output.Status) : undefined;
+
+  if (statementState && TERMINAL_STATEMENT_STATES.has(statementState)) {
+    return statementState;
+  }
+  if (outputStatus === 'ok') {
+    return 'available';
+  }
+  if (outputStatus === 'error') {
+    return 'error';
+  }
+  if (outputStatus && TERMINAL_STATEMENT_STATES.has(outputStatus)) {
+    return outputStatus;
+  }
+  return statementState ?? outputStatus ?? 'unknown';
 }
 
 export function mapGlueSession(session: {
