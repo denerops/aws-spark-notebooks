@@ -94,14 +94,12 @@ export class NotebookConnectionHub {
   }
 
   isConnected(notebook: vscode.NotebookDocument): boolean {
-    const backend = this.resolveBackend(notebook);
-    if (backend === 'glue') {
-      return Boolean(this.glue.getSession(notebook)?.isReady);
+    const glueSession = this.glue.getSession(notebook);
+    if (glueSession?.isReady) {
+      return true;
     }
-    if (backend === 'emr') {
-      return Boolean(this.emr.getSession(notebook)?.isReady);
-    }
-    return false;
+    const emrSession = this.emr.getSession(notebook);
+    return Boolean(emrSession?.isReady);
   }
 
   async ensureConnected(notebook: vscode.NotebookDocument): Promise<SparkSessionHandle> {

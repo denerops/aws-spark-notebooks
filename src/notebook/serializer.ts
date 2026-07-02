@@ -348,6 +348,7 @@ export function registerSerializer(context: vscode.ExtensionContext): void {
         kernelspec: true,
         language_info: true,
         emrServerless: true,
+        glueInteractive: true,
       },
     })
   );

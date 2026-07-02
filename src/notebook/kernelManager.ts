@@ -2,11 +2,8 @@ import * as vscode from 'vscode';
 import type { SessionPresetStore } from '../session/presets';
 import type { GlueSessionPresetStore } from '../glue/presets';
 import type { NotebookConnectionHub } from '../platform/connectionHub';
-import {
-  isNotebookConnected as isEmrNotebookConnected,
-  selectEmrKernel,
-} from '../ui/kernelSelection';
-import { isGlueNotebookConnected, pickSparkBackend, selectGlueKernel } from '../ui/glueKernelSelection';
+import { selectEmrKernel } from '../ui/kernelSelection';
+import { pickSparkBackend, selectGlueKernel } from '../ui/glueKernelSelection';
 import { SparknbController } from './controller';
 import {
   CONTROLLER_ID,
@@ -97,10 +94,7 @@ export class EmrKernelManager implements vscode.Disposable {
   }
 
   private isNotebookConnected(notebook: vscode.NotebookDocument): boolean {
-    return (
-      isEmrNotebookConnected(this.connectionHub.getEmrManager(), notebook) ||
-      isGlueNotebookConnected(this.connectionHub.getGlueManager(), notebook)
-    );
+    return this.connectionHub.isConnected(notebook);
   }
 
   async promptKernelSelection(
@@ -203,15 +197,23 @@ export class EmrKernelManager implements vscode.Disposable {
     notebook: vscode.NotebookDocument
   ): Promise<void> {
     const connected = await this.promptKernelSelection(notebook);
-    if (connected && cells.length > 0) {
-      await this.sparkController.executeCells(cells, notebook, this.mainController);
-    } else if (cells.length > 0) {
-      await this.sparkController.failCells(
-        cells,
-        notebook,
-        this.selectController,
-        'No Spark session selected. Use the kernel picker to select an EMR Serverless or Glue Interactive session.'
-      );
+    if (!connected) {
+      if (cells.length > 0) {
+        await this.sparkController.failCells(
+          cells,
+          notebook,
+          this.selectController,
+          'No Spark session selected. Use the kernel picker to select an EMR Serverless or Glue Interactive session.'
+        );
+      }
+      return;
+    }
+
+    this.updateKernelAppearance(notebook);
+
+    if (cells.length > 0) {
+      // Must execute with the controller that received the run request (selectController).
+      await this.sparkController.executeCells(cells, notebook, this.selectController);
     }
   }
 
@@ -230,6 +232,7 @@ export class EmrKernelManager implements vscode.Disposable {
         );
         return;
       }
+      this.updateKernelAppearance(notebook);
     }
 
     await this.sparkController.executeCells(cells, notebook, this.mainController);

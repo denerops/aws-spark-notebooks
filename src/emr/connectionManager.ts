@@ -102,8 +102,7 @@ export class ConnectionManager {
 
     const binding: NotebookBinding = { applicationId, region, session };
     this.bindings.set(notebook.uri.toString(), binding);
-    await this.updateNotebookMetadata(notebook, { applicationId, sessionId });
-    await this.clearGlueMetadata(notebook);
+    await this.setNotebookConnectionMetadata(notebook, { applicationId, sessionId });
     return binding;
   }
 
@@ -135,11 +134,10 @@ export class ConnectionManager {
       session,
     };
     this.bindings.set(notebook.uri.toString(), binding);
-    await this.updateNotebookMetadata(notebook, {
+    await this.setNotebookConnectionMetadata(notebook, {
       applicationId,
       sessionId: session.sessionId,
     });
-    await this.clearGlueMetadata(notebook);
     return binding;
   }
 
@@ -341,16 +339,7 @@ export class ConnectionManager {
     notebook: vscode.NotebookDocument,
     emrServerless: SparkNotebookMetadata
   ): Promise<void> {
-    const edit = new vscode.WorkspaceEdit();
-    const metadata = {
-      ...notebook.metadata,
-      emrServerless: {
-        ...((notebook.metadata?.emrServerless ?? {}) as SparkNotebookMetadata),
-        ...emrServerless,
-      },
-    };
-    edit.set(notebook.uri, [vscode.NotebookEdit.updateNotebookMetadata(metadata)]);
-    await vscode.workspace.applyEdit(edit);
+    await this.setNotebookConnectionMetadata(notebook, emrServerless);
   }
 
   async getApplicationName(applicationId: string): Promise<string> {
@@ -359,13 +348,17 @@ export class ConnectionManager {
     return app?.name ?? applicationId;
   }
 
-  private async clearGlueMetadata(notebook: vscode.NotebookDocument): Promise<void> {
-    if (!notebook.metadata?.glueInteractive) {
-      return;
-    }
+  private async setNotebookConnectionMetadata(
+    notebook: vscode.NotebookDocument,
+    emrServerless: SparkNotebookMetadata
+  ): Promise<void> {
     const edit = new vscode.WorkspaceEdit();
     const metadata = {
       ...notebook.metadata,
+      emrServerless: {
+        ...((notebook.metadata?.emrServerless ?? {}) as SparkNotebookMetadata),
+        ...emrServerless,
+      },
       glueInteractive: {},
     };
     edit.set(notebook.uri, [vscode.NotebookEdit.updateNotebookMetadata(metadata)]);
