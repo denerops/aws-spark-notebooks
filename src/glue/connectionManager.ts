@@ -154,9 +154,23 @@ export class GlueConnectionManager {
     const region = await getDefaultRegion();
     const input = buildCreateGlueSessionInput(preset, { sessionName });
     const session = await GlueLivySession.create(region, input);
-    await installPresetPythonPackagesForGlue(session, preset?.pythonPackages);
-    await this.refreshDashboard(session);
+    void this.finishSessionSetup(session, preset?.pythonPackages);
     return session;
+  }
+
+  private async finishSessionSetup(
+    session: GlueLivySession,
+    pythonPackages?: string[]
+  ): Promise<void> {
+    try {
+      await installPresetPythonPackagesForGlue(session, pythonPackages);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      void vscode.window.showWarningMessage(
+        `Glue session ${session.sessionId}: failed to install Python packages. ${message}`
+      );
+    }
+    await this.refreshDashboard(session).catch(() => undefined);
   }
 
   async refreshDashboard(session: GlueLivySession): Promise<string | undefined> {
