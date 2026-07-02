@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { getEmrServerlessService } from '../aws/emrServerlessClient';
 import type { ConnectionManager } from '../emr/connectionManager';
+import type { NotebookConnectionHub } from '../platform/connectionHub';
 import { createBlankSparknbDocument, createStarterSparknbDocument } from '../notebook/defaultDocument';
 import { LivySession } from '../livy/session';
 import { getSessionPresetStore } from '../session/presets';
@@ -71,7 +72,8 @@ export function registerApplicationsActions(
   context: vscode.ExtensionContext,
   connectionManager: ConnectionManager,
   tree: ApplicationsTreeProvider,
-  kernelManager?: EmrKernelManager
+  kernelManager?: EmrKernelManager,
+  connectionHub?: NotebookConnectionHub
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.refreshApplications', () => {
@@ -346,13 +348,15 @@ export function registerApplicationsActions(
   context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.refreshDashboard', async () => {
       const notebook = getActiveSparknb();
-      const url = await connectionManager.openSparkUi(notebook);
+      const url = connectionHub
+        ? await connectionHub.openSparkUi(notebook)
+        : await connectionManager.openSparkUi(notebook);
       if (url) {
         vscode.window.showInformationMessage('Spark UI link refreshed.');
       } else {
-        const target = connectionManager.resolveSparkUiTarget(notebook);
-        const session = target?.session;
-        const detail = session?.dashboardError;
+        const emrTarget = connectionManager.resolveSparkUiTarget(notebook);
+        const glueTarget = connectionHub?.getGlueManager().resolveSparkUiTarget(notebook);
+        const detail = emrTarget?.session?.dashboardError ?? glueTarget?.session?.dashboardError;
         vscode.window.showWarningMessage(
           detail
             ? `Could not fetch Spark UI URL: ${detail}`
@@ -383,10 +387,13 @@ export function registerApplicationsActions(
         }
 
         const notebook = getActiveSparknb();
-        const url = await connectionManager.openSparkUi(notebook);
+        const url = connectionHub
+          ? await connectionHub.openSparkUi(notebook)
+          : await connectionManager.openSparkUi(notebook);
         if (!url) {
-          const target = connectionManager.resolveSparkUiTarget(notebook);
-          const detail = target?.session?.dashboardError;
+          const emrTarget = connectionManager.resolveSparkUiTarget(notebook);
+          const glueTarget = connectionHub?.getGlueManager().resolveSparkUiTarget(notebook);
+          const detail = emrTarget?.session?.dashboardError ?? glueTarget?.session?.dashboardError;
           vscode.window.showWarningMessage(
             detail
               ? `Could not open Spark UI: ${detail}`

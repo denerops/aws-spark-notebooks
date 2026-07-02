@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
-import type { ConnectionManager } from '../emr/connectionManager';
 import type { SessionPresetStore } from '../session/presets';
+import type { GlueSessionPresetStore } from '../glue/presets';
+import type { NotebookConnectionHub } from '../platform/connectionHub';
 import {
-  isNotebookConnected,
+  isNotebookConnected as isEmrNotebookConnected,
   selectEmrKernel,
 } from '../ui/kernelSelection';
+import { isGlueNotebookConnected, pickSparkBackend, selectGlueKernel } from '../ui/glueKernelSelection';
 import { SparknbController } from './controller';
 import {
   CONTROLLER_ID,
@@ -13,25 +15,26 @@ import {
   isEmrSparkNotebook,
 } from './types';
 import { formatLivySessionLabel } from '../livy/types';
+import { formatGlueSessionLabel } from '../glue/types';
 
 export class EmrKernelManager implements vscode.Disposable {
   private readonly mainController: vscode.NotebookController;
   private readonly selectController: vscode.NotebookController;
   private readonly sparkController: SparknbController;
-  /** Skip the first controller selection after open (implicit preferred kernel). */
   private readonly skipKernelPromptOnSelect = new Set<string>();
 
   constructor(
-    private readonly connectionManager: ConnectionManager,
-    private readonly presetStore: SessionPresetStore,
+    private readonly connectionHub: NotebookConnectionHub,
+    private readonly emrPresetStore: SessionPresetStore,
+    private readonly gluePresetStore: GlueSessionPresetStore,
     private readonly context: vscode.ExtensionContext
   ) {
-    this.sparkController = new SparknbController(connectionManager);
+    this.sparkController = new SparknbController(connectionHub);
 
     this.mainController = vscode.notebooks.createNotebookController(
       CONTROLLER_ID,
       NOTEBOOK_TYPE,
-      'EMR Serverless PySpark'
+      'AWS Spark PySpark'
     );
     this.mainController.supportedLanguages = ['python', 'sql'];
     this.mainController.supportsExecutionOrder = true;
@@ -41,11 +44,11 @@ export class EmrKernelManager implements vscode.Disposable {
     this.selectController = vscode.notebooks.createNotebookController(
       KERNEL_SELECT_CONTROLLER_ID,
       NOTEBOOK_TYPE,
-      'Select EMR Session…'
+      'Select Spark Session…'
     );
     this.selectController.supportedLanguages = ['python', 'sql'];
     this.selectController.supportsExecutionOrder = true;
-    this.selectController.description = 'Choose application and Livy session';
+    this.selectController.description = 'Choose EMR Serverless or Glue Interactive session';
     this.selectController.executeHandler = (cells, notebook) =>
       this.handleSelectKernelExecute(cells, notebook);
 
@@ -59,7 +62,7 @@ export class EmrKernelManager implements vscode.Disposable {
         return;
       }
 
-      if (!isNotebookConnected(this.connectionManager, event.notebook)) {
+      if (!this.isNotebookConnected(event.notebook)) {
         void this.promptKernelSelection(event.notebook);
       }
     });
@@ -72,7 +75,7 @@ export class EmrKernelManager implements vscode.Disposable {
         if (!isEmrSparkNotebook(notebook)) {
           return;
         }
-        if (!isNotebookConnected(connectionManager, notebook)) {
+        if (!this.isNotebookConnected(notebook)) {
           this.skipKernelPromptOnSelect.add(notebook.uri.toString());
         }
         this.updateKernelAppearance(notebook);
@@ -93,15 +96,39 @@ export class EmrKernelManager implements vscode.Disposable {
     // Controllers disposed via context.subscriptions
   }
 
-  async promptKernelSelection(notebook: vscode.NotebookDocument): Promise<boolean> {
-    const connected = await selectEmrKernel(
-      this.connectionManager,
-      this.presetStore,
-      notebook
+  private isNotebookConnected(notebook: vscode.NotebookDocument): boolean {
+    return (
+      isEmrNotebookConnected(this.connectionHub.getEmrManager(), notebook) ||
+      isGlueNotebookConnected(this.connectionHub.getGlueManager(), notebook)
     );
+  }
+
+  async promptKernelSelection(
+    notebook: vscode.NotebookDocument,
+    backend?: 'emr' | 'glue'
+  ): Promise<boolean> {
+    const selectedBackend = backend ?? (await pickSparkBackend());
+    if (!selectedBackend) {
+      return false;
+    }
+
+    const connected =
+      selectedBackend === 'glue'
+        ? await selectGlueKernel(
+            this.connectionHub.getGlueManager(),
+            this.gluePresetStore,
+            notebook
+          )
+        : await selectEmrKernel(
+            this.connectionHub.getEmrManager(),
+            this.emrPresetStore,
+            notebook
+          );
+
     if (connected) {
       this.updateKernelAppearance(notebook);
       void vscode.commands.executeCommand('emrServerless.refreshApplications');
+      void vscode.commands.executeCommand('glueInteractive.refreshSessions');
       void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
     } else {
       this.updateKernelAppearance(notebook);
@@ -114,20 +141,15 @@ export class EmrKernelManager implements vscode.Disposable {
       return;
     }
 
-    const binding = this.connectionManager.getBinding(notebook);
-
-    if (binding?.session.isReady) {
-      const shortApp =
-        binding.applicationId.length > 16
-          ? `${binding.applicationId.slice(0, 12)}…`
-          : binding.applicationId;
-      const sessionLabel = formatLivySessionLabel({
-        id: binding.session.sessionId,
-        name: binding.session.name,
+    const glueBinding = this.connectionHub.getGlueManager().getBinding(notebook);
+    if (glueBinding?.session.isReady) {
+      const sessionLabel = formatGlueSessionLabel({
+        id: glueBinding.session.sessionId,
+        description: glueBinding.session.name,
       });
-      this.mainController.label = 'EMR Serverless PySpark';
-      this.mainController.description = `${shortApp} · ${sessionLabel}`;
-      this.mainController.detail = binding.session.state;
+      this.mainController.label = 'Glue Interactive PySpark';
+      this.mainController.description = sessionLabel;
+      this.mainController.detail = glueBinding.session.state;
       this.mainController.updateNotebookAffinity(
         notebook,
         vscode.NotebookControllerAffinity.Preferred
@@ -139,9 +161,33 @@ export class EmrKernelManager implements vscode.Disposable {
       return;
     }
 
-    this.mainController.label = 'EMR Serverless PySpark';
+    const emrBinding = this.connectionHub.getEmrManager().getBinding(notebook);
+    if (emrBinding?.session.isReady) {
+      const shortApp =
+        emrBinding.applicationId.length > 16
+          ? `${emrBinding.applicationId.slice(0, 12)}…`
+          : emrBinding.applicationId;
+      const sessionLabel = formatLivySessionLabel({
+        id: emrBinding.session.sessionId,
+        name: emrBinding.session.name,
+      });
+      this.mainController.label = 'EMR Serverless PySpark';
+      this.mainController.description = `${shortApp} · ${sessionLabel}`;
+      this.mainController.detail = emrBinding.session.state;
+      this.mainController.updateNotebookAffinity(
+        notebook,
+        vscode.NotebookControllerAffinity.Preferred
+      );
+      this.selectController.updateNotebookAffinity(
+        notebook,
+        vscode.NotebookControllerAffinity.Default
+      );
+      return;
+    }
+
+    this.mainController.label = 'AWS Spark PySpark';
     this.mainController.description = 'No session selected';
-    this.mainController.detail = 'Select a Livy session to run cells';
+    this.mainController.detail = 'Select an EMR or Glue session to run cells';
     this.selectController.updateNotebookAffinity(
       notebook,
       vscode.NotebookControllerAffinity.Preferred
@@ -164,7 +210,7 @@ export class EmrKernelManager implements vscode.Disposable {
         cells,
         notebook,
         this.selectController,
-        'No EMR Serverless session selected. Use the kernel picker to select an application and session.'
+        'No Spark session selected. Use the kernel picker to select an EMR Serverless or Glue Interactive session.'
       );
     }
   }
@@ -173,14 +219,14 @@ export class EmrKernelManager implements vscode.Disposable {
     cells: vscode.NotebookCell[],
     notebook: vscode.NotebookDocument
   ): Promise<void> {
-    if (!isNotebookConnected(this.connectionManager, notebook)) {
+    if (!this.isNotebookConnected(notebook)) {
       const connected = await this.promptKernelSelection(notebook);
       if (!connected) {
         await this.sparkController.failCells(
           cells,
           notebook,
           this.mainController,
-          'No EMR Serverless session selected. Use the kernel picker to select an application and session.'
+          'No Spark session selected. Use the kernel picker to select an EMR Serverless or Glue Interactive session.'
         );
         return;
       }
@@ -193,10 +239,16 @@ export class EmrKernelManager implements vscode.Disposable {
 
 export function registerKernelManager(
   context: vscode.ExtensionContext,
-  connectionManager: ConnectionManager,
-  presetStore: SessionPresetStore
+  connectionHub: NotebookConnectionHub,
+  emrPresetStore: SessionPresetStore,
+  gluePresetStore: GlueSessionPresetStore
 ): EmrKernelManager {
-  const manager = new EmrKernelManager(connectionManager, presetStore, context);
+  const manager = new EmrKernelManager(
+    connectionHub,
+    emrPresetStore,
+    gluePresetStore,
+    context
+  );
   context.subscriptions.push(manager);
   return manager;
 }

@@ -17,8 +17,8 @@ function resolvePresetId(
   if (presetId) {
     return presetId;
   }
-  if (item?.preset?.id) {
-    return item.preset.id;
+  if (item?.emrPreset?.id) {
+    return item.emrPreset.id;
   }
   return undefined;
 }

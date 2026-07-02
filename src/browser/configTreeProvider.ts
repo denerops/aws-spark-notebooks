@@ -3,14 +3,17 @@ import { getEmrServerlessService } from '../aws/emrServerlessClient';
 import { getConfiguredAwsProfile, getConfiguredAwsRegion } from '../aws/config';
 import { getProfileDisplayLabel } from '../aws/profile';
 import type { SessionPreset, SessionPresetStore } from '../session/presets';
+import type { GlueSessionPreset, GlueSessionPresetStore } from '../glue/presets';
 
 export const CONFIG_VIEW_ID = 'emrServerlessConfig';
 
 export type ConfigNodeKind =
   | 'awsProfile'
   | 'awsRegion'
-  | 'presetsRoot'
-  | 'preset'
+  | 'emrPresetsRoot'
+  | 'gluePresetsRoot'
+  | 'emrPreset'
+  | 'gluePreset'
   | 'presetEmpty';
 
 export class ConfigTreeItem extends vscode.TreeItem {
@@ -23,7 +26,8 @@ export class ConfigTreeItem extends vscode.TreeItem {
       tooltip?: string;
       command?: vscode.Command;
       iconPath?: vscode.ThemeIcon;
-      preset?: SessionPreset;
+      emrPreset?: SessionPreset;
+      gluePreset?: GlueSessionPreset;
     }
   ) {
     super(label, collapsibleState);
@@ -31,21 +35,39 @@ export class ConfigTreeItem extends vscode.TreeItem {
     this.tooltip = options?.tooltip ?? label;
     this.command = options?.command;
     this.iconPath = options?.iconPath ?? iconForKind(kind);
-    this.contextValue = kind === 'preset' ? contextValueForPreset(options?.preset) : kind;
-    this.preset = options?.preset;
+    this.contextValue = contextValueForKind(kind, options?.emrPreset, options?.gluePreset);
+    this.emrPreset = options?.emrPreset;
+    this.gluePreset = options?.gluePreset;
   }
 
-  readonly preset?: SessionPreset;
+  readonly emrPreset?: SessionPreset;
+  readonly gluePreset?: GlueSessionPreset;
 }
 
-function contextValueForPreset(preset?: SessionPreset): string {
-  if (preset?.source === 'workspace') {
-    return 'presetWorkspace';
+function contextValueForKind(
+  kind: ConfigNodeKind,
+  emrPreset?: SessionPreset,
+  gluePreset?: GlueSessionPreset
+): string {
+  if (kind === 'emrPreset') {
+    if (emrPreset?.source === 'workspace') {
+      return 'emrPresetWorkspace';
+    }
+    if (emrPreset?.source === 'user') {
+      return 'emrPresetUser';
+    }
+    return 'emrPreset';
   }
-  if (preset?.source === 'user') {
-    return 'presetUser';
+  if (kind === 'gluePreset') {
+    if (gluePreset?.source === 'workspace') {
+      return 'gluePresetWorkspace';
+    }
+    if (gluePreset?.source === 'user') {
+      return 'gluePresetUser';
+    }
+    return 'gluePreset';
   }
-  return 'preset';
+  return kind;
 }
 
 function iconForKind(kind: ConfigNodeKind): vscode.ThemeIcon {
@@ -54,22 +76,25 @@ function iconForKind(kind: ConfigNodeKind): vscode.ThemeIcon {
       return new vscode.ThemeIcon('key');
     case 'awsRegion':
       return new vscode.ThemeIcon('globe');
-    case 'presetsRoot':
-      return new vscode.ThemeIcon('settings-gear');
-    case 'preset':
+    case 'emrPresetsRoot':
+      return new vscode.ThemeIcon('server-environment');
+    case 'gluePresetsRoot':
+      return new vscode.ThemeIcon('cloud');
+    case 'emrPreset':
+    case 'gluePreset':
       return new vscode.ThemeIcon('symbol-property');
     case 'presetEmpty':
       return new vscode.ThemeIcon('info');
   }
 }
 
-function iconForPreset(preset: SessionPreset): vscode.ThemeIcon {
-  return preset.source === 'workspace'
+function iconForPreset(source?: 'workspace' | 'user'): vscode.ThemeIcon {
+  return source === 'workspace'
     ? new vscode.ThemeIcon('repo')
     : new vscode.ThemeIcon('account');
 }
 
-function formatPresetTooltip(preset: SessionPreset): string {
+function formatEmrPresetTooltip(preset: SessionPreset): string {
   const role = preset.executionRoleArn || '(no role set)';
   const scope =
     preset.source === 'workspace'
@@ -86,17 +111,50 @@ function formatPresetTooltip(preset: SessionPreset): string {
   ].join('\n');
 }
 
-function buildPresetItem(preset: SessionPreset): ConfigTreeItem {
+function formatGluePresetTooltip(preset: GlueSessionPreset): string {
+  const role = preset.roleArn || '(no role set)';
+  const scope =
+    preset.source === 'workspace'
+      ? 'Team preset (workspace file)'
+      : preset.source === 'user'
+        ? 'Personal preset'
+        : undefined;
+  return [
+    preset.name,
+    ...(scope ? [scope] : []),
+    `Glue ${preset.glueVersion}`,
+    `Workers: ${preset.numberOfWorkers} × ${preset.workerType}`,
+    `Role: ${role}`,
+  ].join('\n');
+}
+
+function buildEmrPresetItem(preset: SessionPreset): ConfigTreeItem {
   const scope = preset.source === 'workspace' ? 'workspace' : 'personal';
   const sizing = `${preset.numExecutors}× executor · ${preset.executorCores} cores · ${preset.executorMemory}`;
-  return new ConfigTreeItem('preset', preset.name, vscode.TreeItemCollapsibleState.None, {
+  return new ConfigTreeItem('emrPreset', preset.name, vscode.TreeItemCollapsibleState.None, {
     description: `${scope} · ${sizing}`,
-    tooltip: formatPresetTooltip(preset),
-    iconPath: iconForPreset(preset),
-    preset,
+    tooltip: formatEmrPresetTooltip(preset),
+    iconPath: iconForPreset(preset.source),
+    emrPreset: preset,
     command: {
       command: 'emrServerless.editSessionPreset',
-      title: 'Edit Session Preset',
+      title: 'Edit EMR Session Preset',
+      arguments: [preset.id],
+    },
+  });
+}
+
+function buildGluePresetItem(preset: GlueSessionPreset): ConfigTreeItem {
+  const scope = preset.source === 'workspace' ? 'workspace' : 'personal';
+  const sizing = `${preset.numberOfWorkers}× ${preset.workerType} · Glue ${preset.glueVersion}`;
+  return new ConfigTreeItem('gluePreset', preset.name, vscode.TreeItemCollapsibleState.None, {
+    description: `${scope} · ${sizing}`,
+    tooltip: formatGluePresetTooltip(preset),
+    iconPath: iconForPreset(preset.source),
+    gluePreset: preset,
+    command: {
+      command: 'glueInteractive.editSessionPreset',
+      title: 'Edit Glue Session Preset',
       arguments: [preset.id],
     },
   });
@@ -108,17 +166,30 @@ export class ConfigTreeProvider implements vscode.TreeDataProvider<ConfigTreeIte
 
   private region = '';
   private profileLabel = '';
-  private presets: SessionPreset[] = [];
+  private emrPresets: SessionPreset[] = [];
+  private gluePresets: GlueSessionPreset[] = [];
 
-  constructor(private readonly store: SessionPresetStore) {}
+  constructor(
+    private readonly emrStore: SessionPresetStore,
+    private readonly glueStore: GlueSessionPresetStore
+  ) {}
 
   refresh(): void {
     this.onDidChangeTreeDataEmitter.fire(undefined);
   }
 
-  async refreshPresets(): Promise<void> {
-    this.presets = await this.store.list();
+  async refreshEmrPresets(): Promise<void> {
+    this.emrPresets = await this.emrStore.list();
     this.refresh();
+  }
+
+  async refreshGluePresets(): Promise<void> {
+    this.gluePresets = await this.glueStore.list();
+    this.refresh();
+  }
+
+  async refreshPresets(): Promise<void> {
+    await Promise.all([this.refreshEmrPresets(), this.refreshGluePresets()]);
   }
 
   async refreshAwsContext(): Promise<void> {
@@ -141,18 +212,34 @@ export class ConfigTreeProvider implements vscode.TreeDataProvider<ConfigTreeIte
 
   getChildren(element?: ConfigTreeItem): ConfigTreeItem[] {
     if (!element) {
-      return [this.buildProfileItem(), this.buildRegionItem(), this.buildPresetsRootItem()];
+      return [
+        this.buildProfileItem(),
+        this.buildRegionItem(),
+        this.buildEmrPresetsRootItem(),
+        this.buildGluePresetsRootItem(),
+      ];
     }
 
-    if (element.kind === 'presetsRoot') {
-      if (this.presets.length === 0) {
+    if (element.kind === 'emrPresetsRoot') {
+      if (this.emrPresets.length === 0) {
         return [
-          new ConfigTreeItem('presetEmpty', 'No session presets', vscode.TreeItemCollapsibleState.None, {
-            description: 'Click + in toolbar to add',
+          new ConfigTreeItem('presetEmpty', 'No EMR session presets', vscode.TreeItemCollapsibleState.None, {
+            description: 'Use + EMR in toolbar',
           }),
         ];
       }
-      return this.presets.map((preset) => buildPresetItem(preset));
+      return this.emrPresets.map((preset) => buildEmrPresetItem(preset));
+    }
+
+    if (element.kind === 'gluePresetsRoot') {
+      if (this.gluePresets.length === 0) {
+        return [
+          new ConfigTreeItem('presetEmpty', 'No Glue session presets', vscode.TreeItemCollapsibleState.None, {
+            description: 'Use + Glue in toolbar',
+          }),
+        ];
+      }
+      return this.gluePresets.map((preset) => buildGluePresetItem(preset));
     }
 
     return [];
@@ -188,15 +275,28 @@ export class ConfigTreeProvider implements vscode.TreeDataProvider<ConfigTreeIte
     });
   }
 
-  private buildPresetsRootItem(): ConfigTreeItem {
-    const count = this.presets.length;
+  private buildEmrPresetsRootItem(): ConfigTreeItem {
+    const count = this.emrPresets.length;
     return new ConfigTreeItem(
-      'presetsRoot',
-      'Session Presets',
+      'emrPresetsRoot',
+      'EMR Session Presets',
       vscode.TreeItemCollapsibleState.Expanded,
       {
         description: count === 1 ? '1 preset' : `${count} presets`,
-        tooltip: 'Workspace and personal Livy session presets',
+        tooltip: 'Livy session presets for EMR Serverless',
+      }
+    );
+  }
+
+  private buildGluePresetsRootItem(): ConfigTreeItem {
+    const count = this.gluePresets.length;
+    return new ConfigTreeItem(
+      'gluePresetsRoot',
+      'Glue Session Presets',
+      vscode.TreeItemCollapsibleState.Expanded,
+      {
+        description: count === 1 ? '1 preset' : `${count} presets`,
+        tooltip: 'Interactive session presets for AWS Glue (Livy)',
       }
     );
   }
@@ -204,12 +304,14 @@ export class ConfigTreeProvider implements vscode.TreeDataProvider<ConfigTreeIte
 
 export function registerConfigTree(
   context: vscode.ExtensionContext,
-  store: SessionPresetStore
+  emrStore: SessionPresetStore,
+  glueStore: GlueSessionPresetStore
 ): ConfigTreeProvider {
-  const provider = new ConfigTreeProvider(store);
+  const provider = new ConfigTreeProvider(emrStore, glueStore);
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider(CONFIG_VIEW_ID, provider),
-    store.onDidChange(() => void provider.refreshPresets())
+    emrStore.onDidChange(() => void provider.refreshEmrPresets()),
+    glueStore.onDidChange(() => void provider.refreshGluePresets())
   );
   void provider.refreshPresets();
   return provider;

@@ -1,7 +1,7 @@
 {
   "name": "emr-serverless-pyspark",
-  "displayName": "EMR Serverless PySpark",
-  "description": "Run PySpark and Spark SQL in .sparknb and .ipynb notebooks on EMR Serverless via Apache Livy",
+  "displayName": "AWS Spark Notebooks",
+  "description": "Run PySpark and Spark SQL in .sparknb and .ipynb notebooks on EMR Serverless and AWS Glue Interactive Sessions via Apache Livy",
   "version": "0.6.0",
   "publisher": "denerops",
   "license": "MIT",
@@ -28,7 +28,9 @@
     "spark",
     "pyspark",
     "livy",
-    "notebook"
+    "notebook",
+    "glue",
+    "interactive-sessions"
   ],
   "activationEvents": [
     "onStartupFinished",
@@ -36,7 +38,8 @@
     "onNotebookSerializer:emr-spark",
     "onRenderer:emr-spark-table-renderer",
     "onView:emrServerlessApplications",
-    "onView:emrServerlessConfig"
+    "onView:emrServerlessConfig",
+    "onView:glueInteractiveSessions"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -112,6 +115,12 @@
         "command": "emrServerless.refreshApplications",
         "title": "Refresh",
         "icon": "$(refresh)",
+        "category": "EMR Serverless"
+      },
+      {
+        "command": "emrServerless.verifyAwsCredentials",
+        "title": "Verify AWS Credentials",
+        "icon": "$(debug-console)",
         "category": "EMR Serverless"
       },
       {
@@ -199,13 +208,75 @@
         "title": "Help",
         "icon": "$(question)",
         "category": "EMR Serverless"
+      },
+      {
+        "command": "glueInteractive.refreshSessions",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Glue Interactive"
+      },
+      {
+        "command": "glueInteractive.newSession",
+        "title": "New Glue Session",
+        "icon": "$(add)",
+        "category": "Glue Interactive"
+      },
+      {
+        "command": "glueInteractive.attachSession",
+        "title": "Attach to Glue Session",
+        "icon": "$(link)",
+        "category": "Glue Interactive"
+      },
+      {
+        "command": "glueInteractive.stopSession",
+        "title": "Stop Glue Session",
+        "icon": "$(debug-stop)",
+        "category": "Glue Interactive"
+      },
+      {
+        "command": "glueInteractive.openSparkUi",
+        "title": "Open Spark UI",
+        "icon": "$(globe)",
+        "category": "Glue Interactive"
+      },
+      {
+        "command": "glueInteractive.connect",
+        "title": "Connect to Glue Session",
+        "category": "Glue Interactive"
+      },
+      {
+        "command": "glueInteractive.editSessionPreset",
+        "title": "Edit Glue Session Preset",
+        "category": "Glue Interactive"
+      },
+      {
+        "command": "glueInteractive.newSessionPreset",
+        "title": "New Glue Session Preset",
+        "icon": "$(add)",
+        "category": "Glue Interactive"
+      },
+      {
+        "command": "glueInteractive.openWorkspacePresetsFile",
+        "title": "Open Glue Workspace Presets File",
+        "icon": "$(repo)",
+        "category": "Glue Interactive"
+      },
+      {
+        "command": "glueInteractive.exportPresetsToWorkspace",
+        "title": "Export Personal Glue Presets to Workspace",
+        "category": "Glue Interactive"
+      },
+      {
+        "command": "glueInteractive.openSessionPresets",
+        "title": "Focus Config",
+        "category": "Glue Interactive"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
           "id": "emr-serverless-explorer",
-          "title": "EMR Serverless",
+          "title": "AWS Spark",
           "icon": "media/emr-serverless.svg"
         }
       ]
@@ -214,8 +285,13 @@
       "emr-serverless-explorer": [
         {
           "id": "emrServerlessApplications",
-          "name": "Applications",
+          "name": "EMR Applications",
           "icon": "media/emr-serverless.svg"
+        },
+        {
+          "id": "glueInteractiveSessions",
+          "name": "Glue Sessions",
+          "icon": "$(cloud)"
         },
         {
           "id": "emrServerlessConfig",
@@ -252,6 +328,9 @@
           "command": "emrServerless.refreshApplications"
         },
         {
+          "command": "emrServerless.verifyAwsCredentials"
+        },
+        {
           "command": "emrServerless.openSessionPresets"
         },
         {
@@ -279,12 +358,22 @@
         {
           "command": "emrServerless.newSessionPreset",
           "when": "view == emrServerlessConfig",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "glueInteractive.newSessionPreset",
+          "when": "view == emrServerlessConfig",
+          "group": "navigation@2"
         },
         {
           "command": "emrServerless.openWorkspacePresetsFile",
           "when": "view == emrServerlessConfig",
-          "group": "navigation"
+          "group": "navigation@3"
+        },
+        {
+          "command": "glueInteractive.openWorkspacePresetsFile",
+          "when": "view == emrServerlessConfig",
+          "group": "navigation@4"
         },
         {
           "command": "emrServerless.openWelcome",
@@ -297,7 +386,32 @@
           "group": "navigation@99"
         },
         {
+          "command": "glueInteractive.refreshSessions",
+          "when": "view == glueInteractiveSessions",
+          "group": "navigation"
+        },
+        {
+          "command": "glueInteractive.newSession",
+          "when": "view == glueInteractiveSessions",
+          "group": "navigation"
+        },
+        {
+          "command": "glueInteractive.openSparkUi",
+          "when": "view == glueInteractiveSessions",
+          "group": "navigation"
+        },
+        {
+          "command": "emrServerless.openWelcome",
+          "when": "view == glueInteractiveSessions",
+          "group": "navigation@99"
+        },
+        {
           "command": "emrServerless.refreshApplications",
+          "when": "view == emrServerlessApplications",
+          "group": "navigation"
+        },
+        {
+          "command": "emrServerless.verifyAwsCredentials",
           "when": "view == emrServerlessApplications",
           "group": "navigation"
         },
@@ -342,12 +456,28 @@
           "command": "emrServerless.newSession",
           "when": "view == emrServerlessApplications && viewItem == applicationRunning",
           "group": "1_actions@1"
+        },
+        {
+          "command": "glueInteractive.attachSession",
+          "when": "view == glueInteractiveSessions && viewItem == sessionReady",
+          "group": "inline@1"
+        },
+        {
+          "command": "glueInteractive.openSparkUi",
+          "when": "view == glueInteractiveSessions && viewItem == sessionReady",
+          "group": "inline@2"
+        },
+        {
+          "command": "glueInteractive.stopSession",
+          "when": "view == glueInteractiveSessions && (viewItem == sessionReady || viewItem == sessionProvisioning || viewItem == session)",
+          "group": "2_destructive@1"
         }
       ]
     },
-    "configuration": {
-      "title": "EMR Serverless",
-      "properties": {
+    "configuration": [
+      {
+        "title": "EMR Serverless",
+        "properties": {
         "emrServerless.defaultExecutionRoleArn": {
           "type": "string",
           "default": "",
@@ -445,8 +575,55 @@
           "default": "",
           "description": "AWS region for EMR Serverless API calls. Empty uses the region from the selected AWS profile (~/.aws/config) or AWS_REGION. Change it in the Config sidebar view."
         }
+        }
+      },
+      {
+        "title": "Glue Interactive Sessions",
+        "properties": {
+        "glueInteractive.defaultRoleArn": {
+          "type": "string",
+          "default": "",
+          "description": "IAM role passed to Glue CreateSession (iam:PassRole required)."
+        },
+        "glueInteractive.sessionDefaults": {
+          "type": "object",
+          "default": {
+            "glueVersion": "4.0",
+            "workerType": "G.1X",
+            "numberOfWorkers": 2,
+            "idleTimeout": 30,
+            "pythonVersion": "3",
+            "defaultArguments": {
+              "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+              "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+              "spark.sql.catalog.spark_catalog.type": "glue"
+            }
+          },
+          "description": "Default Glue CreateSession fields when starting a new Livy session."
+        },
+        "glueInteractive.statementPollIntervalMs": {
+          "type": "number",
+          "default": 500,
+          "description": "Poll interval when waiting for Glue RunStatement completion."
+        },
+        "glueInteractive.sessionStartupTimeoutSeconds": {
+          "type": "number",
+          "default": 600,
+          "description": "Timeout when waiting for a new Glue session to reach READY."
+        },
+        "glueInteractive.sessionPresets.workspaceFile": {
+          "type": "string",
+          "default": ".vscode/glue-interactive-presets.json",
+          "description": "Path relative to the workspace folder for team-shared Glue session presets."
+        },
+        "glueInteractive.sessionPresets.preferWorkspace": {
+          "type": "boolean",
+          "default": true,
+          "description": "When creating new Glue presets, default to the workspace file when a folder is open."
+        }
+        }
       }
-    }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
@@ -473,6 +650,7 @@
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",
     "@aws-sdk/client-emr-serverless": "^3.821.0",
+    "@aws-sdk/client-glue": "^3.1078.0",
     "@aws-sdk/credential-providers": "^3.821.0",
     "@smithy/node-http-handler": "^4.0.4",
     "@smithy/protocol-http": "^5.1.2",
