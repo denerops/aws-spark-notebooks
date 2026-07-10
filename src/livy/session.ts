@@ -68,11 +68,16 @@ export class LivySession {
   static async create(
     applicationId: string,
     region: string,
-    body: Record<string, unknown>
+    body: Record<string, unknown>,
+    onProgress?: (info: LivySessionInfo) => void
   ): Promise<LivySession> {
     const client = new LivySigV4Client(applicationId, region);
     const info = await client.createSession(body);
     const requestedName = typeof body.name === 'string' ? body.name.trim() : undefined;
+    onProgress?.({
+      ...info,
+      name: info.name ?? requestedName,
+    });
     const session = new LivySession(
       applicationId,
       region,
@@ -81,7 +86,7 @@ export class LivySession {
       info.appId,
       info.name ?? requestedName
     );
-    await session.waitUntilReady();
+    await session.waitUntilReady(onProgress);
     await session.bootstrap();
     return session;
   }
@@ -122,12 +127,13 @@ export class LivySession {
     return info;
   }
 
-  async waitUntilReady(): Promise<void> {
+  async waitUntilReady(onProgress?: (info: LivySessionInfo) => void): Promise<void> {
     const timeoutMs = getSessionStartupTimeoutSeconds() * 1000;
     const started = Date.now();
 
     while (Date.now() - started < timeoutMs) {
       const info = await this.refreshState();
+      onProgress?.(info);
       if (READY_STATES.has(info.state)) {
         return;
       }

@@ -15,6 +15,7 @@ export type AppTreeNodeKind =
   | 'applicationStopping'
   | 'applicationRunning'
   | 'session'
+  | 'sessionStarting'
   | 'loading'
   | 'error'
   | 'empty';
@@ -56,6 +57,7 @@ function iconForKind(kind: AppTreeNodeKind): vscode.ThemeIcon {
       return new vscode.ThemeIcon('server-environment');
     case 'applicationStarting':
     case 'applicationStopping':
+    case 'sessionStarting':
       return new vscode.ThemeIcon('loading~spin');
     case 'applicationStopped':
       return new vscode.ThemeIcon('debug-disconnect');
@@ -87,12 +89,20 @@ function kindForApplicationState(state: string): AppTreeNodeKind {
   }
 }
 
+const SESSION_STARTING_STATES = new Set(['not_started', 'starting', 'recovering']);
+
+function kindForSessionState(state: string): AppTreeNodeKind {
+  return SESSION_STARTING_STATES.has(state) ? 'sessionStarting' : 'session';
+}
+
 export class ApplicationsTreeProvider implements vscode.TreeDataProvider<ApplicationsTreeItem> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<ApplicationsTreeItem | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private applications: LivyApplication[] = [];
   private sessionsByApp = new Map<string, LivySessionInfo[]>();
+  /** Apps with a session create in flight before Livy returns a session id. */
+  private readonly pendingSessionCreate = new Map<string, string | undefined>();
   private region = '';
   private loadError: string | undefined;
   private loading = false;
@@ -117,6 +127,32 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
     this._onDidChangeTreeData.fire(undefined);
   }
 
+  /** Show a "Creating session…" row under the app until Livy assigns a session id. */
+  markSessionCreating(applicationId: string, sessionName?: string): void {
+    this.pendingSessionCreate.set(applicationId, sessionName);
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** Insert or update a session row as creation progresses (starting → idle). */
+  upsertSession(applicationId: string, session: LivySessionInfo): void {
+    this.pendingSessionCreate.delete(applicationId);
+    const existing = this.sessionsByApp.get(applicationId) ?? [];
+    const index = existing.findIndex((s) => s.id === session.id);
+    const next = [...existing];
+    if (index >= 0) {
+      next[index] = { ...next[index], ...session };
+    } else {
+      next.push(session);
+    }
+    this.sessionsByApp.set(applicationId, next);
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  clearSessionCreating(applicationId: string): void {
+    this.pendingSessionCreate.delete(applicationId);
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
   async loadApplications(): Promise<void> {
     this.loading = true;
     this.loadError = undefined;
@@ -125,6 +161,7 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
       this.region = await service.getRegion();
       this.applications = await service.listLivyApplications();
       this.sessionsByApp.clear();
+      // Keep pendingSessionCreate — an in-flight create should still show in the tree.
 
       for (const app of this.applications) {
         if (app.state === 'STARTED') {
@@ -219,9 +256,10 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
       element.context.applicationId
     ) {
       const sessions = this.sessionsByApp.get(element.context.applicationId) ?? [];
-      const items: ApplicationsTreeItem[] = sessions.map((session) =>
-        new ApplicationsTreeItem(
-          'session',
+      const items: ApplicationsTreeItem[] = sessions.map((session) => {
+        const kind = kindForSessionState(session.state);
+        return new ApplicationsTreeItem(
+          kind,
           {
             applicationId: element.context.applicationId,
             applicationName: element.context.applicationName,
@@ -235,21 +273,25 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
             description: `${session.state} · ${session.kind ?? 'pyspark'}`,
             tooltip: `Session ${session.id}${session.name ? `\nName: ${session.name}` : ''}\nOwner: ${session.owner ?? 'unknown'}`,
           }
-        )
-      );
+        );
+      });
 
       const appId = element.context.applicationId!;
-      if (this.connectionManager.isCreatingSession(appId)) {
+      if (this.pendingSessionCreate.has(appId)) {
+        const pendingName = this.pendingSessionCreate.get(appId);
+        const label = pendingName?.trim()
+          ? `Creating "${pendingName}"…`
+          : 'Creating session…';
         items.push(
           new ApplicationsTreeItem(
             'loading',
             element.context,
-            'Creating session…',
+            label,
             vscode.TreeItemCollapsibleState.None,
-            { description: 'Please wait' }
+            { description: 'starting' }
           )
         );
-      } else {
+      } else if (!this.connectionManager.isCreatingSession(appId)) {
         items.push(
           new ApplicationsTreeItem(
             'empty',

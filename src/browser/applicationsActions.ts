@@ -83,6 +83,47 @@ export function registerApplicationsActions(
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
+      'emrServerless.markSessionCreating',
+      (applicationId?: string, sessionName?: string) => {
+        if (!applicationId) {
+          return;
+        }
+        tree.markSessionCreating(applicationId, sessionName);
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'emrServerless.patchSessionProgress',
+      (
+        applicationId?: string,
+        info?: {
+          id: number;
+          state: string;
+          name?: string;
+          kind?: string;
+          owner?: string;
+          appId?: string;
+        }
+      ) => {
+        if (!applicationId || !info) {
+          return;
+        }
+        tree.upsertSession(applicationId, {
+          id: info.id,
+          state: info.state,
+          name: info.name,
+          kind: info.kind ?? 'pyspark',
+          owner: info.owner,
+          appId: info.appId,
+        });
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
       'emrServerless.startApplication',
       async (item?: ApplicationsTreeItem) => {
         const appId = item?.context.applicationId;
@@ -329,6 +370,26 @@ export function registerApplicationsActions(
             return;
           }
 
+          const onProgress = (info: {
+            id: number;
+            state: string;
+            name?: string;
+            kind?: string;
+            owner?: string;
+            appId?: string;
+          }) => {
+            tree.upsertSession(appId, {
+              id: info.id,
+              state: info.state,
+              name: info.name ?? sessionName,
+              kind: info.kind ?? 'pyspark',
+              owner: info.owner,
+              appId: info.appId,
+            });
+          };
+
+          tree.markSessionCreating(appId, sessionName);
+
           const session = await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
@@ -341,11 +402,17 @@ export function registerApplicationsActions(
                   targetNotebook,
                   appId,
                   preset,
-                  sessionName
+                  sessionName,
+                  onProgress
                 );
                 return binding.session;
               }
-              return connectionManager.createStandaloneSession(appId, preset, sessionName);
+              return connectionManager.createStandaloneSession(
+                appId,
+                preset,
+                sessionName,
+                onProgress
+              );
             }
           );
 
@@ -365,6 +432,8 @@ export function registerApplicationsActions(
           });
           tree.refresh();
         } catch (error) {
+          tree.clearSessionCreating(appId);
+          tree.refresh();
           const message = error instanceof Error ? error.message : String(error);
           if (message.includes('already being created')) {
             vscode.window.showInformationMessage(message);

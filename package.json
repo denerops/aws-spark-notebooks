@@ -455,7 +455,7 @@
         },
         {
           "command": "emrServerless.stopSession",
-          "when": "view == emrServerlessApplications && viewItem == session",
+          "when": "view == emrServerlessApplications && (viewItem == session || viewItem == sessionStarting)",
           "group": "2_destructive@1"
         },
         {

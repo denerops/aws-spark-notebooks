@@ -5,6 +5,7 @@ import type { SessionPreset } from '../session/presets';
 import { getDefaultRegion } from '../aws/credentials';
 import { installPresetPythonPackages } from '../livy/installPythonPackages';
 import { LivySession } from '../livy/session';
+import type { LivySessionInfo } from '../livy/types';
 import type { SparkNotebookMetadata } from '../notebook/types';
 import { isEmrSparkNotebook } from '../notebook/types';
 
@@ -131,7 +132,8 @@ export class ConnectionManager {
     notebook: vscode.NotebookDocument,
     applicationId: string,
     preset?: SessionPreset,
-    sessionName?: string
+    sessionName?: string,
+    onProgress?: (info: LivySessionInfo) => void
   ): Promise<NotebookBinding> {
     const liveBinding = await this.getLiveBinding(notebook);
     if (liveBinding?.applicationId === applicationId) {
@@ -139,7 +141,7 @@ export class ConnectionManager {
     }
 
     const session = await this.withSessionCreationLock(applicationId, () =>
-      this.createLivySession(applicationId, preset, sessionName)
+      this.createLivySession(applicationId, preset, sessionName, onProgress)
     );
 
     const binding: NotebookBinding = {
@@ -158,10 +160,11 @@ export class ConnectionManager {
   async createStandaloneSession(
     applicationId: string,
     preset?: SessionPreset,
-    sessionName?: string
+    sessionName?: string,
+    onProgress?: (info: LivySessionInfo) => void
   ): Promise<LivySession> {
     return this.withSessionCreationLock(applicationId, () =>
-      this.createLivySession(applicationId, preset, sessionName)
+      this.createLivySession(applicationId, preset, sessionName, onProgress)
     );
   }
 
@@ -189,11 +192,12 @@ export class ConnectionManager {
   private async createLivySession(
     applicationId: string,
     preset?: SessionPreset,
-    sessionName?: string
+    sessionName?: string,
+    onProgress?: (info: LivySessionInfo) => void
   ): Promise<LivySession> {
     const region = await getDefaultRegion();
     const body = buildCreateSessionBody(preset, { sessionName });
-    const session = await LivySession.create(applicationId, region, body);
+    const session = await LivySession.create(applicationId, region, body, onProgress);
     await installPresetPythonPackages(session, preset?.pythonPackages);
     await this.refreshDashboard(session);
     return session;
