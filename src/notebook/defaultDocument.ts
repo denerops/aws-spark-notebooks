@@ -1,9 +1,10 @@
-import type { SparkNotebookMetadata } from './types';
+import type { GlueNotebookMetadata, SparkNotebookMetadata } from './types';
 import { EMR_KERNELSPEC, EMR_LANGUAGE_INFO } from './ipynbCompat';
 
 function baseMetadata(emrServerless: SparkNotebookMetadata = {}) {
   return {
     emrServerless,
+    glueInteractive: {} as GlueNotebookMetadata,
     kernelspec: { ...EMR_KERNELSPEC },
     language_info: { ...EMR_LANGUAGE_INFO },
   };
@@ -84,6 +85,10 @@ export function parseSparknbContent(text: string, options?: { preserveMetadata?:
         emrServerless: {
           ...blank.metadata.emrServerless,
           ...(parsed.metadata?.emrServerless ?? {}),
+        },
+        glueInteractive: {
+          ...(blank.metadata.glueInteractive ?? {}),
+          ...((parsed.metadata?.glueInteractive as GlueNotebookMetadata | undefined) ?? {}),
         },
       },
       cells: Array.isArray(parsed.cells) ? parsed.cells : [],

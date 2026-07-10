@@ -67,7 +67,14 @@ export class EmrKernelManager implements vscode.Disposable {
       (this.isNotebookConnected(notebook) || this.connectionHub.resolveBackend(notebook))
     ) {
       try {
-        await this.connectionHub.ensureConnected(notebook);
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Reconnecting to Spark session…',
+          },
+          () => this.connectionHub.ensureConnected(notebook)
+        );
+        this.updateKernelAppearance(notebook);
         return true;
       } catch {
         // Stale binding/metadata or dead session — fall through to picker.
