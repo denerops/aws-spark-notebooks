@@ -234,6 +234,12 @@
         "category": "Glue Interactive"
       },
       {
+        "command": "glueInteractive.deleteSession",
+        "title": "Delete Glue Session",
+        "icon": "$(trash)",
+        "category": "Glue Interactive"
+      },
+      {
         "command": "glueInteractive.openSparkUi",
         "title": "Open Spark UI",
         "icon": "$(globe)",
@@ -471,6 +477,11 @@
           "command": "glueInteractive.stopSession",
           "when": "view == glueInteractiveSessions && (viewItem == sessionReady || viewItem == sessionProvisioning || viewItem == session)",
           "group": "2_destructive@1"
+        },
+        {
+          "command": "glueInteractive.deleteSession",
+          "when": "view == glueInteractiveSessions && (viewItem == sessionReady || viewItem == sessionProvisioning || viewItem == session || viewItem == sessionStopped)",
+          "group": "2_destructive@2"
         }
       ]
     },

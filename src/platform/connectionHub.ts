@@ -103,19 +103,8 @@ export class NotebookConnectionHub {
       return true;
     }
 
-    const glueMeta = notebook.metadata?.glueInteractive as { sessionId?: string } | undefined;
-    if (glueMeta?.sessionId) {
-      return true;
-    }
-
-    const emrMeta = notebook.metadata?.emrServerless as {
-      applicationId?: string;
-      sessionId?: number;
-    } | undefined;
-    if (emrMeta?.applicationId && emrMeta.sessionId !== undefined) {
-      return true;
-    }
-
+    // Metadata alone means "can reconnect", not "currently connected".
+    // Stale session ids after a cluster/session stop must not block a new session.
     return false;
   }
 

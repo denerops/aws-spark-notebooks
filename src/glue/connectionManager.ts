@@ -13,8 +13,6 @@ export interface GlueNotebookBinding {
   session: GlueLivySession;
 }
 
-const DEAD_STATES = new Set(['dead', 'error', 'killed', 'shutting_down']);
-
 export class GlueConnectionManager {
   private readonly bindings = new Map<string, GlueNotebookBinding>();
   private readonly connecting = new Map<string, Promise<GlueNotebookBinding>>();
@@ -32,6 +30,32 @@ export class GlueConnectionManager {
     return this.getBinding(notebook)?.session;
   }
 
+  /**
+   * Refresh the bound session. Returns the binding if still ready; otherwise clears the
+   * notebook session and returns undefined.
+   */
+  async getLiveBinding(
+    notebook: vscode.NotebookDocument
+  ): Promise<GlueNotebookBinding | undefined> {
+    const binding = this.getBinding(notebook);
+    if (!binding) {
+      return undefined;
+    }
+
+    try {
+      await binding.session.refreshState();
+    } catch {
+      binding.session.state = 'dead';
+    }
+
+    if (binding.session.isReady) {
+      return binding;
+    }
+
+    await this.clearNotebookSession(notebook);
+    return undefined;
+  }
+
   listBindings(): GlueNotebookBinding[] {
     return [...this.bindings.values()];
   }
@@ -42,20 +66,12 @@ export class GlueConnectionManager {
 
   async ensureConnected(notebook: vscode.NotebookDocument): Promise<GlueLivySession> {
     const key = notebook.uri.toString();
-    const existing = this.getBinding(notebook);
-    if (existing) {
-      await existing.session.refreshState().catch(() => undefined);
-      if (existing.session.isReady) {
-        if (!existing.session.dashboardUrl) {
-          await this.refreshDashboard(existing.session);
-        }
-        return existing.session;
+    const live = await this.getLiveBinding(notebook);
+    if (live) {
+      if (!live.session.dashboardUrl) {
+        await this.refreshDashboard(live.session);
       }
-      if (DEAD_STATES.has(existing.session.state)) {
-        await this.clearNotebookSession(notebook);
-      } else {
-        return existing.session;
-      }
+      return live.session;
     }
 
     const inFlight = this.connecting.get(key);
@@ -101,13 +117,9 @@ export class GlueConnectionManager {
     preset?: GlueSessionPreset,
     sessionName?: string
   ): Promise<GlueNotebookBinding> {
-    const existingBinding = this.getBinding(notebook);
-    if (existingBinding?.session.isReady) {
-      return existingBinding;
-    }
-
-    if (existingBinding && !existingBinding.session.isReady) {
-      this.bindings.delete(notebook.uri.toString());
+    const liveBinding = await this.getLiveBinding(notebook);
+    if (liveBinding) {
+      return liveBinding;
     }
 
     const session = await this.withSessionCreationLock(() =>

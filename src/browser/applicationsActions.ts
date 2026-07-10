@@ -131,8 +131,15 @@ export function registerApplicationsActions(
             },
             () => getEmrServerlessService().stopApplication(appId)
           );
+
+          const notebooks = await connectionManager.detachNotebooksForApplication(appId);
+          for (const notebook of notebooks) {
+            kernelManager?.updateKernelAppearance(notebook);
+          }
+
           vscode.window.showInformationMessage(`Application ${appId} stopped.`);
           tree.refresh();
+          void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
@@ -165,8 +172,15 @@ export function registerApplicationsActions(
             },
             () => getEmrServerlessService().restartApplication(appId)
           );
+
+          const notebooks = await connectionManager.detachNotebooksForApplication(appId);
+          for (const notebook of notebooks) {
+            kernelManager?.updateKernelAppearance(notebook);
+          }
+
           vscode.window.showInformationMessage(`Application ${appId} restarted.`);
           tree.refresh();
+          void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
@@ -268,10 +282,10 @@ export function registerApplicationsActions(
         const targetNotebook = findOpenSparknb();
 
         if (targetNotebook) {
-          const existing = connectionManager.getSession(targetNotebook);
-          if (existing?.applicationId === appId && existing.isReady) {
+          const existing = await connectionManager.getLiveBinding(targetNotebook);
+          if (existing?.applicationId === appId) {
             const reuse = await vscode.window.showInformationMessage(
-              `This notebook is already connected to session ${existing.sessionId}.`,
+              `This notebook is already connected to session ${existing.session.sessionId}.`,
               'Open Spark UI',
               'Create Another Session'
             );
@@ -279,7 +293,9 @@ export function registerApplicationsActions(
               await vscode.commands.executeCommand('emrServerless.openSparkUi');
               return;
             }
-            if (reuse !== 'Create Another Session') {
+            if (reuse === 'Create Another Session') {
+              await connectionManager.disconnectNotebook(targetNotebook);
+            } else {
               return;
             }
           }

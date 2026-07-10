@@ -31,6 +31,31 @@ export class ConnectionManager {
     return this.getBinding(notebook)?.session;
   }
 
+  /**
+   * Refresh the bound session. Returns the binding if still ready; otherwise clears the
+   * notebook session (keeping applicationId) and returns undefined.
+   */
+  async getLiveBinding(notebook: vscode.NotebookDocument): Promise<NotebookBinding | undefined> {
+    const binding = this.getBinding(notebook);
+    if (!binding) {
+      return undefined;
+    }
+
+    try {
+      await binding.session.refreshState();
+    } catch {
+      // Application stopped or session gone — treat as dead.
+      binding.session.state = 'dead';
+    }
+
+    if (binding.session.isReady) {
+      return binding;
+    }
+
+    await this.clearNotebookSession(notebook, { keepApplicationId: true });
+    return undefined;
+  }
+
   listBindings(): NotebookBinding[] {
     return [...this.bindings.values()];
   }
@@ -53,16 +78,12 @@ export class ConnectionManager {
 
   async ensureConnected(notebook: vscode.NotebookDocument): Promise<LivySession> {
     const key = notebook.uri.toString();
-    const existing = this.getBinding(notebook);
-    if (existing) {
-      await existing.session.refreshState().catch(() => undefined);
-      if (existing.session.isReady) {
-        if (!existing.session.dashboardUrl) {
-          await this.refreshDashboard(existing.session);
-        }
-        return existing.session;
+    const live = await this.getLiveBinding(notebook);
+    if (live) {
+      if (!live.session.dashboardUrl) {
+        await this.refreshDashboard(live.session);
       }
-      await this.clearNotebookSession(notebook, { keepApplicationId: true });
+      return live.session;
     }
 
     const inFlight = this.connecting.get(key);
@@ -112,16 +133,9 @@ export class ConnectionManager {
     preset?: SessionPreset,
     sessionName?: string
   ): Promise<NotebookBinding> {
-    const existingBinding = this.getBinding(notebook);
-    if (
-      existingBinding?.applicationId === applicationId &&
-      existingBinding.session.isReady
-    ) {
-      return existingBinding;
-    }
-
-    if (existingBinding && !existingBinding.session.isReady) {
-      this.bindings.delete(notebook.uri.toString());
+    const liveBinding = await this.getLiveBinding(notebook);
+    if (liveBinding?.applicationId === applicationId) {
+      return liveBinding;
     }
 
     const session = await this.withSessionCreationLock(applicationId, () =>
@@ -302,6 +316,32 @@ export class ConnectionManager {
       const matches =
         (binding?.applicationId === applicationId && binding.session.sessionId === sessionId) ||
         (meta.applicationId === applicationId && meta.sessionId === sessionId);
+
+      if (matches) {
+        await this.clearNotebookSession(notebook, { keepApplicationId: true });
+        affected.push(notebook);
+      }
+    }
+
+    return affected;
+  }
+
+  /** Drop bindings for all notebooks tied to an application (e.g. after stop/restart). */
+  async detachNotebooksForApplication(
+    applicationId: string
+  ): Promise<vscode.NotebookDocument[]> {
+    const affected: vscode.NotebookDocument[] = [];
+
+    for (const notebook of vscode.workspace.notebookDocuments) {
+      if (!isEmrSparkNotebook(notebook)) {
+        continue;
+      }
+
+      const binding = this.getBinding(notebook);
+      const meta = this.resolveNotebookMetadata(notebook);
+      const matches =
+        binding?.applicationId === applicationId ||
+        (meta.applicationId === applicationId && meta.sessionId !== undefined);
 
       if (matches) {
         await this.clearNotebookSession(notebook, { keepApplicationId: true });
