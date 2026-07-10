@@ -286,7 +286,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
         <tr><td>2</td><td><em>preset name</em></td><td>Click to edit — scope shown in description; repo/account icon</td></tr>
       </tbody>
     </table>
-    <p>Changing profile or region disconnects open notebook sessions. Toolbar: refresh, new EMR preset, new Glue preset, open workspace presets files.</p>
+    <p>Changing profile or region disconnects open notebook sessions. Toolbar: refresh, open workspace presets file. Use <strong>+</strong> on <strong>EMR Session Presets</strong> or <strong>Glue Session Presets</strong> to create a new preset.</p>
     <p>Team preset files: <code>.vscode/emr-serverless-presets.json</code> (EMR) and <code>.vscode/glue-interactive-presets.json</code> (Glue).</p>
   </section>
 
@@ -366,7 +366,6 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
       <thead><tr><th>Item</th><th>Description</th></tr></thead>
       <tbody>
         <tr><td><code>$(globe) Spark UI</code></td><td>Open Spark UI (when a notebook is connected)</td></tr>
-        <tr><td><code>$(question) Spark Help</code></td><td>Open this documentation</td></tr>
       </tbody>
     </table>
     <p>AWS profile and region are in the <strong>Config</strong> sidebar view.</p>

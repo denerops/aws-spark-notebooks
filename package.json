@@ -362,24 +362,9 @@
           "group": "navigation"
         },
         {
-          "command": "emrServerless.newSessionPreset",
-          "when": "view == emrServerlessConfig",
-          "group": "navigation@1"
-        },
-        {
-          "command": "glueInteractive.newSessionPreset",
-          "when": "view == emrServerlessConfig",
-          "group": "navigation@2"
-        },
-        {
           "command": "emrServerless.openWorkspacePresetsFile",
           "when": "view == emrServerlessConfig",
           "group": "navigation@3"
-        },
-        {
-          "command": "glueInteractive.openWorkspacePresetsFile",
-          "when": "view == emrServerlessConfig",
-          "group": "navigation@4"
         },
         {
           "command": "emrServerless.openWelcome",
@@ -428,6 +413,16 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "emrServerless.newSessionPreset",
+          "when": "view == emrServerlessConfig && viewItem == emrPresetsRoot",
+          "group": "inline@1"
+        },
+        {
+          "command": "glueInteractive.newSessionPreset",
+          "when": "view == emrServerlessConfig && viewItem == gluePresetsRoot",
+          "group": "inline@1"
+        },
         {
           "command": "emrServerless.startApplication",
           "when": "view == emrServerlessApplications && viewItem == applicationStopped",
