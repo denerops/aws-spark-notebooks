@@ -17,10 +17,10 @@ function typeSlug(typeName: string): string {
 }
 
 export function styleForTypeName(typeName: string): ColumnTypeStyle {
-  const label = typeName.toUpperCase();
+  const label = typeName.toLowerCase();
   return {
     label,
-    className: `duckdb-type-${typeSlug(typeName) || 'unknown'}`,
+    className: `duckdb-col-type duckdb-type-${typeSlug(typeName) || 'unknown'}`,
   };
 }
 

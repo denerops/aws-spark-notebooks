@@ -1,64 +1,66 @@
 .duckdb-table-output {
-  --duckdb-accent: var(--vscode-textLink-foreground, #3794ff);
-  --duckdb-border: var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.45)));
-  --duckdb-muted: var(--vscode-descriptionForeground, #9da5b4);
-  --duckdb-surface: var(--vscode-editor-background, #1e1e1e);
-  --duckdb-surface-2: var(--vscode-sideBar-background, #252526);
-  --duckdb-surface-3: var(--vscode-input-background, #3c3c3c);
-  --duckdb-hover: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.16));
-  --duckdb-header-bg: var(--vscode-list-activeSelectionBackground, rgba(55, 148, 255, 0.14));
-  --duckdb-zebra: rgba(128, 128, 128, 0.1);
-  --duckdb-radius: 10px;
-  --duckdb-mono: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, monospace);
+  /* Databricks-like results table — adapts to VS Code light/dark */
+  --dbx-border: var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+  --dbx-muted: var(--vscode-descriptionForeground, #8b949e);
+  --dbx-fg: var(--vscode-foreground, #24292f);
+  --dbx-surface: var(--vscode-editor-background, #ffffff);
+  --dbx-header: color-mix(in srgb, var(--vscode-foreground) 4%, var(--vscode-editor-background));
+  --dbx-gutter: color-mix(in srgb, var(--vscode-foreground) 6%, var(--vscode-editor-background));
+  --dbx-hover: color-mix(in srgb, #1b67b3 12%, var(--vscode-editor-background));
+  --dbx-selected: color-mix(in srgb, #1b67b3 18%, var(--vscode-editor-background));
+  --dbx-accent: #1b67b3;
+  --dbx-grid: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+  --dbx-font: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  --dbx-mono: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, monospace);
 
-  font-family: var(--vscode-font-family, system-ui, sans-serif);
+  font-family: var(--dbx-font);
   font-size: 12px;
-  color: var(--vscode-foreground, #cccccc);
-  line-height: 1.4;
-  margin: 4px 0;
+  color: var(--dbx-fg);
+  line-height: 1.35;
+  margin: 2px 0 6px;
 }
 
 .duckdb-result-card {
-  border: 1px solid var(--duckdb-border);
-  border-radius: var(--duckdb-radius);
-  background: var(--duckdb-surface);
+  border: 1px solid var(--dbx-border);
+  border-radius: 2px;
+  background: var(--dbx-surface);
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 .duckdb-table-banner {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--duckdb-border);
-  background: rgba(255, 184, 107, 0.12);
-  color: var(--vscode-editorWarning-foreground, #e3b341);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--dbx-border);
+  background: color-mix(in srgb, #c47d00 12%, var(--dbx-surface));
+  color: var(--vscode-editorWarning-foreground, #9a6700);
   font-size: 11px;
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
 .duckdb-footer-hint {
   flex: 1 1 100%;
-  font-size: 10px;
-  color: var(--duckdb-muted);
+  font-size: 11px;
+  color: var(--dbx-muted);
 }
 
 .duckdb-count-btn {
-  border: 1px solid var(--duckdb-border);
-  border-radius: 4px;
-  background: var(--duckdb-surface-3);
-  color: var(--vscode-foreground, #cccccc);
+  border: 1px solid var(--dbx-border);
+  border-radius: 2px;
+  background: var(--dbx-surface);
+  color: var(--dbx-fg);
   font: inherit;
   font-size: 11px;
-  padding: 4px 10px;
+  padding: 3px 8px;
   cursor: pointer;
 }
 
 .duckdb-count-btn:hover:not(:disabled) {
-  background: var(--duckdb-hover);
-  border-color: var(--duckdb-accent);
+  background: var(--dbx-hover);
+  border-color: var(--dbx-accent);
+  color: var(--dbx-accent);
 }
 
 .duckdb-count-btn:disabled {
-  opacity: 0.65;
+  opacity: 0.6;
   cursor: default;
 }
 
@@ -85,10 +87,10 @@
   width: 24px;
   height: 24px;
   padding: 0;
-  border: 1px solid var(--duckdb-border);
-  border-radius: 4px;
-  background: var(--duckdb-surface-3);
-  color: var(--vscode-foreground, #cccccc);
+  border: 1px solid var(--dbx-border);
+  border-radius: 2px;
+  background: var(--dbx-surface);
+  color: var(--dbx-fg);
   cursor: pointer;
   line-height: 0;
 }
@@ -100,8 +102,8 @@
 }
 
 .duckdb-search-btn:hover {
-  background: var(--duckdb-hover);
-  border-color: var(--duckdb-accent);
+  background: var(--dbx-hover);
+  border-color: var(--dbx-accent);
 }
 
 .duckdb-hidden {
@@ -109,11 +111,11 @@
 }
 
 .duckdb-search {
-  padding: 6px 10px;
-  border: 1px solid var(--vscode-input-border, var(--duckdb-border));
-  border-radius: 5px;
-  background: var(--vscode-input-background, var(--duckdb-surface-3));
-  color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
+  padding: 4px 8px;
+  border: 1px solid var(--vscode-input-border, var(--dbx-border));
+  border-radius: 2px;
+  background: var(--vscode-input-background, var(--dbx-surface));
+  color: var(--vscode-input-foreground, var(--dbx-fg));
   font: inherit;
   font-size: 12px;
   outline: none;
@@ -123,13 +125,13 @@
 }
 
 .duckdb-search::placeholder {
-  color: var(--vscode-input-placeholderForeground, var(--duckdb-muted));
+  color: var(--vscode-input-placeholderForeground, var(--dbx-muted));
   opacity: 0.9;
 }
 
 .duckdb-search:focus {
-  border-color: var(--duckdb-accent);
-  box-shadow: 0 0 0 1px var(--duckdb-accent);
+  border-color: var(--dbx-accent);
+  box-shadow: 0 0 0 1px var(--dbx-accent);
 }
 
 .duckdb-table-scroll {
@@ -146,114 +148,137 @@
 }
 
 .duckdb-table thead tr {
-  background: var(--duckdb-header-bg);
+  background: var(--dbx-header);
 }
 
 .duckdb-table th,
 .duckdb-table td {
-  padding: 7px 11px;
-  border-bottom: 1px solid var(--duckdb-border);
+  padding: 5px 10px;
+  border-right: 1px solid var(--dbx-grid);
+  border-bottom: 1px solid var(--dbx-grid);
   text-align: left;
   vertical-align: middle;
-  max-width: 360px;
+  max-width: 420px;
+}
+
+.duckdb-table th:last-child,
+.duckdb-table td:last-child {
+  border-right: none;
 }
 
 .duckdb-table th {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--duckdb-header-bg);
-  font-weight: 700;
+  background: var(--dbx-header);
+  font-weight: 600;
   user-select: none;
   white-space: nowrap;
-  border-bottom: 2px solid var(--duckdb-accent);
-  color: var(--vscode-foreground, #cccccc);
+  border-bottom: 1px solid var(--dbx-border);
+  color: var(--dbx-fg);
+  box-shadow: 0 1px 0 var(--dbx-border);
 }
 
 .duckdb-table th.duckdb-sortable {
   cursor: pointer;
-  transition: background 0.12s ease;
 }
 
 .duckdb-table th.duckdb-sortable:hover {
-  background: var(--duckdb-hover);
+  background: var(--dbx-hover);
 }
 
+/* Databricks-style stacked header: name above type */
 .duckdb-th-inner {
   display: inline-flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding-right: 14px;
 }
 
 .duckdb-col-name {
   font-size: 12px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--dbx-fg);
 }
 
 .duckdb-col-type {
   display: inline-block;
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 3px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 10px;
+  font-weight: 400;
+  font-family: var(--dbx-mono);
   line-height: 1.2;
-  border: 1px solid transparent;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--dbx-muted);
 }
 
-.duckdb-type-varchar { color: #d2a8ff; background: rgba(210, 168, 255, 0.14); border-color: rgba(210, 168, 255, 0.32); }
-.duckdb-type-double { color: #58a6ff; background: rgba(88, 166, 255, 0.14); border-color: rgba(88, 166, 255, 0.32); }
-.duckdb-type-integer { color: #3fb950; background: rgba(63, 185, 80, 0.14); border-color: rgba(63, 185, 80, 0.32); }
-.duckdb-type-boolean { color: #ffb86b; background: rgba(255, 184, 107, 0.16); border-color: rgba(255, 184, 107, 0.35); }
-.duckdb-type-json { color: #ff7b72; background: rgba(255, 123, 114, 0.14); border-color: rgba(255, 123, 114, 0.32); }
-.duckdb-type-unknown { color: #8b949e; background: rgba(139, 148, 158, 0.12); border-color: rgba(139, 148, 158, 0.28); }
+/* Keep type class hooks but mute them to Databricks style */
+.duckdb-type-varchar,
+.duckdb-type-double,
+.duckdb-type-integer,
+.duckdb-type-boolean,
+.duckdb-type-json,
+.duckdb-type-unknown,
+.duckdb-type-string,
+.duckdb-type-long,
+.duckdb-type-float,
+.duckdb-type-timestamp,
+.duckdb-type-date {
+  color: var(--dbx-muted);
+  background: transparent;
+  border-color: transparent;
+}
 
 .duckdb-sort-icon {
   position: absolute;
-  right: 10px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
-  opacity: 0.45;
-  font-size: 11px;
+  opacity: 0.35;
+  font-size: 10px;
+  color: var(--dbx-muted);
 }
 
 .duckdb-table th.duckdb-sortable {
   position: sticky;
-  padding-right: 28px;
+  padding-right: 22px;
 }
 
 .duckdb-table th.duckdb-sorted-asc .duckdb-sort-icon,
 .duckdb-table th.duckdb-sorted-desc .duckdb-sort-icon {
   opacity: 1;
-  color: var(--duckdb-accent);
+  color: var(--dbx-accent);
 }
 
 .duckdb-table tbody tr {
-  background: var(--duckdb-surface);
-  transition: background 0.1s ease;
-}
-
-.duckdb-table tbody tr:nth-child(even) {
-  background: var(--duckdb-zebra);
+  background: var(--dbx-surface);
 }
 
 .duckdb-table tbody tr:hover {
-  background: var(--duckdb-hover) !important;
+  background: var(--dbx-hover) !important;
+}
+
+.duckdb-table tbody tr:hover td {
+  background: transparent;
 }
 
 .duckdb-row-num {
-  width: 40px;
-  min-width: 40px;
+  width: 36px;
+  min-width: 36px;
   text-align: right !important;
-  color: var(--duckdb-muted) !important;
+  color: var(--dbx-muted) !important;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
-  background: var(--duckdb-surface-2) !important;
-  border-right: 1px solid var(--duckdb-border);
+  font-family: var(--dbx-mono);
+  background: var(--dbx-gutter) !important;
+  border-right: 1px solid var(--dbx-border);
   position: sticky;
   left: 0;
   z-index: 1;
@@ -261,48 +286,57 @@
 
 .duckdb-table thead .duckdb-row-num {
   z-index: 3;
-  background: var(--duckdb-header-bg) !important;
-  border-bottom: 2px solid var(--duckdb-accent);
+  background: var(--dbx-header) !important;
+  border-bottom: 1px solid var(--dbx-border);
+  box-shadow: 0 1px 0 var(--dbx-border);
+  color: var(--dbx-muted) !important;
+  font-weight: 600;
+}
+
+.duckdb-table tbody tr:hover .duckdb-row-num {
+  background: var(--dbx-hover) !important;
 }
 
 .duckdb-cell {
-  font-family: var(--duckdb-mono);
+  font-family: var(--dbx-font);
   font-size: 12px;
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--vscode-foreground, #cccccc);
+  color: var(--dbx-fg);
 }
 
 .duckdb-cell-num {
   text-align: right !important;
   font-variant-numeric: tabular-nums;
+  font-family: var(--dbx-mono);
 }
 
 .duckdb-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 999px;
+  display: inline;
+  padding: 0;
+  border-radius: 0;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
+  font-family: var(--dbx-mono);
 }
 
-.duckdb-badge-true {
-  background: rgba(46, 160, 67, 0.2);
-  color: #3fb950;
-}
-
+.duckdb-badge-true,
 .duckdb-badge-false {
-  background: rgba(248, 81, 73, 0.18);
-  color: #f85149;
+  background: transparent;
+  color: var(--dbx-fg);
 }
 
 .duckdb-null {
-  color: var(--duckdb-muted);
+  color: var(--dbx-muted);
   font-style: italic;
+  font-family: var(--dbx-mono);
+  font-size: 12px;
 }
 
 .duckdb-json {
-  color: var(--duckdb-accent);
+  color: var(--dbx-fg);
+  font-family: var(--dbx-mono);
+  font-size: 12px;
   cursor: help;
 }
 
@@ -310,38 +344,39 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  padding: 7px 12px;
-  border-top: 1px solid var(--duckdb-border);
-  background: var(--duckdb-surface-2);
-  color: var(--duckdb-muted);
+  padding: 5px 10px;
+  border-top: 1px solid var(--dbx-border);
+  background: var(--dbx-header);
+  color: var(--dbx-muted);
   font-size: 11px;
 }
 
 .duckdb-footer-time {
-  color: var(--duckdb-muted);
+  color: var(--dbx-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  font-family: var(--dbx-mono);
 }
 
 .duckdb-empty {
-  padding: 32px 16px;
+  padding: 28px 14px;
   text-align: center;
-  color: var(--duckdb-muted);
+  color: var(--dbx-muted);
   font-style: italic;
 }
 
 .duckdb-ok {
-  padding: 20px;
+  padding: 16px;
   text-align: center;
-  color: var(--duckdb-muted);
+  color: var(--dbx-muted);
 }
 
 .duckdb-error-card {
-  border: 1px solid var(--vscode-editorError-foreground, #f85149);
-  border-radius: var(--duckdb-radius);
-  background: rgba(248, 81, 73, 0.08);
+  border: 1px solid var(--vscode-editorError-foreground, #cf222e);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--vscode-editorError-foreground, #cf222e) 8%, var(--dbx-surface));
   overflow: hidden;
 }
 
@@ -349,9 +384,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(248, 81, 73, 0.35);
-  background: rgba(248, 81, 73, 0.12);
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-editorError-foreground, #cf222e) 30%, transparent);
+  background: color-mix(in srgb, var(--vscode-editorError-foreground, #cf222e) 10%, var(--dbx-surface));
 }
 
 .duckdb-error-copy-btn {
@@ -362,10 +397,10 @@
   width: 24px;
   height: 24px;
   padding: 0;
-  border: 1px solid var(--duckdb-border);
-  border-radius: 4px;
-  background: var(--duckdb-surface-3);
-  color: var(--vscode-foreground, #cccccc);
+  border: 1px solid var(--dbx-border);
+  border-radius: 2px;
+  background: var(--dbx-surface);
+  color: var(--dbx-fg);
   cursor: pointer;
   line-height: 0;
 }
@@ -377,12 +412,12 @@
 }
 
 .duckdb-error-copy-btn:hover:not(:disabled) {
-  background: var(--duckdb-hover);
-  border-color: var(--duckdb-accent);
+  background: var(--dbx-hover);
+  border-color: var(--dbx-accent);
 }
 
 .duckdb-error-copy-btn:disabled {
-  opacity: 0.65;
+  opacity: 0.6;
   cursor: default;
 }
 
@@ -390,56 +425,56 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--vscode-editorError-foreground, #f85149);
+  background: var(--vscode-editorError-foreground, #cf222e);
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
 }
 
 .duckdb-error-title {
   font-size: 12px;
-  font-weight: 700;
-  color: var(--vscode-editorError-foreground, #f85149);
+  font-weight: 600;
+  color: var(--vscode-editorError-foreground, #cf222e);
 }
 
 .duckdb-error-message {
-  padding: 10px 12px;
-  font-family: var(--duckdb-mono);
+  padding: 8px 10px;
+  font-family: var(--dbx-mono);
   font-size: 12px;
-  line-height: 1.5;
-  color: var(--vscode-foreground, #cccccc);
+  line-height: 1.45;
+  color: var(--dbx-fg);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .duckdb-error-footer {
-  padding: 6px 12px 8px;
-  border-top: 1px solid rgba(248, 81, 73, 0.2);
+  padding: 4px 10px 6px;
+  border-top: 1px solid color-mix(in srgb, var(--vscode-editorError-foreground, #cf222e) 18%, transparent);
   font-size: 11px;
-  color: var(--duckdb-muted);
+  color: var(--dbx-muted);
   text-align: right;
 }
 
 .duckdb-cancelled-card {
-  border-color: var(--duckdb-border);
-  background: var(--duckdb-surface-2);
+  border-color: var(--dbx-border);
+  background: var(--dbx-gutter);
 }
 
 .duckdb-dashboard-card {
-  border: 1px solid var(--duckdb-border);
-  border-radius: var(--duckdb-radius);
-  background: var(--duckdb-surface-2);
-  padding: 10px 12px;
+  border: 1px solid var(--dbx-border);
+  border-radius: 2px;
+  background: var(--dbx-gutter);
+  padding: 8px 10px;
   margin: 4px 0;
   font-size: 12px;
 }
 
 .duckdb-dashboard-card a {
-  color: var(--duckdb-accent);
+  color: var(--dbx-accent);
   text-decoration: none;
 }
 
@@ -448,10 +483,10 @@
 }
 
 .emr-exec-progress-card {
-  border: 1px solid var(--duckdb-border);
-  border-radius: var(--duckdb-radius);
-  background: var(--duckdb-surface-2);
-  padding: 10px 12px;
+  border: 1px solid var(--dbx-border);
+  border-radius: 2px;
+  background: var(--dbx-gutter);
+  padding: 8px 10px;
   margin: 4px 0;
   font-size: 12px;
 }
@@ -463,17 +498,17 @@
 }
 
 .emr-exec-message {
-  color: var(--vscode-foreground, #cccccc);
+  color: var(--dbx-fg);
   font-variant-numeric: tabular-nums;
 }
 
 .emr-exec-links {
-  margin-top: 8px;
+  margin-top: 6px;
   font-size: 11px;
 }
 
 .emr-exec-spark-link {
-  color: var(--duckdb-accent);
+  color: var(--dbx-accent);
   text-decoration: none;
 }
 
@@ -484,8 +519,8 @@
 .emr-exec-spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid var(--duckdb-border);
-  border-top-color: var(--duckdb-accent);
+  border: 2px solid var(--dbx-border);
+  border-top-color: var(--dbx-accent);
   border-radius: 50%;
   animation: emr-exec-spin 0.8s linear infinite;
   flex-shrink: 0;

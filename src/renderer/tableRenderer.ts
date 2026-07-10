@@ -295,7 +295,7 @@ export const activate: ActivationFunction = (context) => {
         const th = document.createElement('th');
         th.className = 'duckdb-sortable';
         th.dataset.col = String(i);
-        th.innerHTML = `<span class="duckdb-th-inner"><span class="duckdb-col-name">${payload.columns[i]}</span><span class="duckdb-col-type ${colStyles[i].className}">${colStyles[i].label}</span></span><span class="duckdb-sort-icon">↕</span>`;
+        th.innerHTML = `<span class="duckdb-th-inner"><span class="duckdb-col-name">${payload.columns[i]}</span><span class="${colStyles[i].className}">${colStyles[i].label}</span></span><span class="duckdb-sort-icon">↕</span>`;
         headerCells.push(th);
         headerRow.append(th);
       }
