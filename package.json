@@ -387,11 +387,6 @@
           "group": "navigation"
         },
         {
-          "command": "glueInteractive.openSparkUi",
-          "when": "view == glueInteractiveSessions",
-          "group": "navigation"
-        },
-        {
           "command": "emrServerless.openWelcome",
           "when": "view == glueInteractiveSessions",
           "group": "navigation@99"
@@ -403,11 +398,6 @@
         },
         {
           "command": "emrServerless.verifyAwsCredentials",
-          "when": "view == emrServerlessApplications",
-          "group": "navigation"
-        },
-        {
-          "command": "emrServerless.openSparkUi",
           "when": "view == emrServerlessApplications",
           "group": "navigation"
         }
@@ -462,11 +452,6 @@
           "command": "glueInteractive.attachSession",
           "when": "view == glueInteractiveSessions && viewItem == sessionReady",
           "group": "inline@1"
-        },
-        {
-          "command": "glueInteractive.openSparkUi",
-          "when": "view == glueInteractiveSessions && viewItem == sessionReady",
-          "group": "inline@2"
         },
         {
           "command": "glueInteractive.stopSession",

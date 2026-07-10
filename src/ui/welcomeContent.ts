@@ -253,7 +253,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
         <tr><td>Restart application</td><td>Context menu on a running application</td></tr>
         <tr><td>New Livy session</td><td>Context menu on running app → pick an EMR session preset</td></tr>
         <tr><td>Attach to session</td><td>Link icon on a session row</td></tr>
-        <tr><td>Open Spark UI</td><td>Globe icon on session row or view toolbar</td></tr>
+        <tr><td>Open Spark UI</td><td>Globe icon on a session row</td></tr>
         <tr><td>Stop session</td><td>Context menu on a session row</td></tr>
       </tbody>
     </table>
@@ -268,7 +268,6 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
         <tr><td>Refresh list</td><td>Toolbar refresh on Glue Sessions view</td></tr>
         <tr><td>New Glue session</td><td>Toolbar <strong>+</strong> → pick a Glue session preset</td></tr>
         <tr><td>Attach to session</td><td>Link icon on a ready session row</td></tr>
-        <tr><td>Open Spark UI</td><td>Globe icon on session row or view toolbar</td></tr>
         <tr><td>Stop session</td><td>Context menu on a session row</td></tr>
       </tbody>
     </table>
@@ -355,7 +354,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
     <ul>
       <li>Spark UI links appear in cell output and the status bar when a session is connected</li>
       <li><strong>Open Spark UI</strong> opens the dashboard in your browser</li>
-      <li>Globe icon on session rows in the Applications and Glue Sessions sidebars</li>
+      <li>Globe icon on session rows in the Applications sidebar</li>
       <li>URLs expire after about one hour — refresh from the sidebar or use <strong>Refresh Spark UI Link</strong> (EMR)</li>
     </ul>
   </section>
