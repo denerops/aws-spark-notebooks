@@ -92,21 +92,32 @@ export class EmrServerlessService {
     return mapApplication(response.application, applicationId);
   }
 
-  async startApplication(applicationId: string): Promise<void> {
+  async startApplication(
+    applicationId: string,
+    onProgress?: (state: string) => void
+  ): Promise<void> {
     const client = await this.getClient();
     await client.send(new StartApplicationCommand({ applicationId }));
-    await this.waitForApplicationState(applicationId, 'STARTED');
+    onProgress?.('STARTING');
+    await this.waitForApplicationState(applicationId, 'STARTED', 600_000, onProgress);
   }
 
-  async stopApplication(applicationId: string): Promise<void> {
+  async stopApplication(
+    applicationId: string,
+    onProgress?: (state: string) => void
+  ): Promise<void> {
     const client = await this.getClient();
     await client.send(new StopApplicationCommand({ applicationId }));
-    await this.waitForApplicationState(applicationId, 'STOPPED');
+    onProgress?.('STOPPING');
+    await this.waitForApplicationState(applicationId, 'STOPPED', 600_000, onProgress);
   }
 
-  async restartApplication(applicationId: string): Promise<void> {
-    await this.stopApplication(applicationId);
-    await this.startApplication(applicationId);
+  async restartApplication(
+    applicationId: string,
+    onProgress?: (state: string) => void
+  ): Promise<void> {
+    await this.stopApplication(applicationId, onProgress);
+    await this.startApplication(applicationId, onProgress);
   }
 
   async getResourceDashboard(applicationId: string, sessionId: number): Promise<string | undefined> {
@@ -185,19 +196,22 @@ export class EmrServerlessService {
   async waitForApplicationState(
     applicationId: string,
     targetState: string,
-    timeoutMs = 600_000
+    timeoutMs = 600_000,
+    onProgress?: (state: string) => void
   ): Promise<void> {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
       const app = await this.getApplication(applicationId);
-      if (app?.state === targetState) {
+      const state = app?.state ?? 'UNKNOWN';
+      onProgress?.(state);
+      if (state === targetState) {
         return;
       }
-      if (targetState === 'STARTED' && app?.state === 'STARTING') {
+      if (targetState === 'STARTED' && state === 'STARTING') {
         await sleep(3000);
         continue;
       }
-      if (targetState === 'STOPPED' && (app?.state === 'STOPPING' || app?.state === 'STARTED')) {
+      if (targetState === 'STOPPED' && (state === 'STOPPING' || state === 'STARTED')) {
         await sleep(3000);
         continue;
       }

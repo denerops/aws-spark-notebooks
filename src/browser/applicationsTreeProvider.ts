@@ -11,6 +11,8 @@ export type AppTreeNodeKind =
   | 'region'
   | 'application'
   | 'applicationStopped'
+  | 'applicationStarting'
+  | 'applicationStopping'
   | 'applicationRunning'
   | 'session'
   | 'loading'
@@ -52,6 +54,9 @@ function iconForKind(kind: AppTreeNodeKind): vscode.ThemeIcon {
     case 'application':
     case 'applicationRunning':
       return new vscode.ThemeIcon('server-environment');
+    case 'applicationStarting':
+    case 'applicationStopping':
+      return new vscode.ThemeIcon('loading~spin');
     case 'applicationStopped':
       return new vscode.ThemeIcon('debug-disconnect');
     case 'session':
@@ -64,6 +69,21 @@ function iconForKind(kind: AppTreeNodeKind): vscode.ThemeIcon {
       return new vscode.ThemeIcon('cloud');
     default:
       return new vscode.ThemeIcon('info');
+  }
+}
+
+function kindForApplicationState(state: string): AppTreeNodeKind {
+  switch (state) {
+    case 'STARTED':
+      return 'applicationRunning';
+    case 'STARTING':
+      return 'applicationStarting';
+    case 'STOPPING':
+      return 'applicationStopping';
+    case 'STOPPED':
+    case 'CREATED':
+    default:
+      return 'applicationStopped';
   }
 }
 
@@ -81,6 +101,19 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
 
   refresh(): void {
     void this.loadApplications();
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** Optimistically update a single app's state in the sidebar (e.g. STARTING / STOPPING). */
+  patchApplicationState(applicationId: string, state: string): void {
+    const index = this.applications.findIndex((app) => app.id === applicationId);
+    if (index < 0) {
+      return;
+    }
+    this.applications[index] = { ...this.applications[index], state };
+    if (state !== 'STARTED') {
+      this.sessionsByApp.delete(applicationId);
+    }
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -155,18 +188,23 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
       }
 
       return this.applications.map((app) => {
-        const running = app.state === 'STARTED';
+        const kind = kindForApplicationState(app.state);
+        const running = kind === 'applicationRunning';
         const sessionCount = this.sessionsByApp.get(app.id)?.length ?? 0;
+        const description =
+          running
+            ? `${app.state} · ${sessionCount} session(s)`
+            : app.state;
         return new ApplicationsTreeItem(
-          running ? 'applicationRunning' : 'applicationStopped',
+          kind,
           { applicationId: app.id, applicationName: app.name, region: this.region },
           app.name,
           running
             ? vscode.TreeItemCollapsibleState.Collapsed
             : vscode.TreeItemCollapsibleState.None,
           {
-            description: `${app.state}${running ? ` · ${sessionCount} session(s)` : ''}`,
-            tooltip: `${app.name} (${app.id})\n${app.releaseLabel ?? ''}`,
+            description,
+            tooltip: `${app.name} (${app.id})\nState: ${app.state}\n${app.releaseLabel ?? ''}`,
           }
         );
       });

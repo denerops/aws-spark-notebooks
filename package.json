@@ -435,7 +435,7 @@
         },
         {
           "command": "emrServerless.stopApplication",
-          "when": "view == emrServerlessApplications && viewItem == applicationRunning",
+          "when": "view == emrServerlessApplications && (viewItem == applicationRunning || viewItem == applicationStarting)",
           "group": "inline@1"
         },
         {

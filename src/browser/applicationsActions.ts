@@ -90,16 +90,21 @@ export function registerApplicationsActions(
           return;
         }
         try {
+          tree.patchApplicationState(appId, 'STARTING');
           await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
               title: `Starting application ${appId}…`,
             },
-            () => getEmrServerlessService().startApplication(appId)
+            () =>
+              getEmrServerlessService().startApplication(appId, (state) =>
+                tree.patchApplicationState(appId, state)
+              )
           );
           vscode.window.showInformationMessage(`Application ${appId} started.`);
           tree.refresh();
         } catch (error) {
+          tree.refresh();
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
         }
@@ -124,12 +129,16 @@ export function registerApplicationsActions(
           return;
         }
         try {
+          tree.patchApplicationState(appId, 'STOPPING');
           await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
               title: `Stopping application ${appId}…`,
             },
-            () => getEmrServerlessService().stopApplication(appId)
+            () =>
+              getEmrServerlessService().stopApplication(appId, (state) =>
+                tree.patchApplicationState(appId, state)
+              )
           );
 
           const notebooks = await connectionManager.detachNotebooksForApplication(appId);
@@ -141,6 +150,7 @@ export function registerApplicationsActions(
           tree.refresh();
           void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
         } catch (error) {
+          tree.refresh();
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
         }
@@ -165,12 +175,16 @@ export function registerApplicationsActions(
           return;
         }
         try {
+          tree.patchApplicationState(appId, 'STOPPING');
           await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
               title: `Restarting application ${appId}…`,
             },
-            () => getEmrServerlessService().restartApplication(appId)
+            () =>
+              getEmrServerlessService().restartApplication(appId, (state) =>
+                tree.patchApplicationState(appId, state)
+              )
           );
 
           const notebooks = await connectionManager.detachNotebooksForApplication(appId);
@@ -182,6 +196,7 @@ export function registerApplicationsActions(
           tree.refresh();
           void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
         } catch (error) {
+          tree.refresh();
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
         }
