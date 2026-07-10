@@ -337,7 +337,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
     <ul>
       <li>Interactive tables with sort, column filter, and CSV export</li>
       <li>Row limit controlled by <code>emrServerless.maxRows</code> (default 1000)</li>
-      <li>Only <code>limit + 1</code> rows are fetched — no automatic full <code>count()</code></li>
+      <li>Only <code>limit + 1</code> rows are fetched for display</li>
     </ul>
   </section>
 

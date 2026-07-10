@@ -37,11 +37,8 @@ export function buildHtmlTable(payload: QueryResultPayload): string {
 }
 
 function formatStaticRowLabel(payload: QueryResultPayload): string {
-  if (payload.countExact) {
-    return `${payload.rowCount.toLocaleString()} row(s)${payload.truncated ? ' · display limited' : ''}`;
-  }
   if (payload.truncated) {
-    return `Showing ${payload.rowCount.toLocaleString()}+ rows · count skipped`;
+    return `Showing ${payload.rowCount.toLocaleString()}+ rows`;
   }
   return `${payload.rowCount.toLocaleString()} row(s)`;
 }

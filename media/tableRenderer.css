@@ -27,43 +27,6 @@
   overflow: hidden;
 }
 
-.duckdb-table-banner {
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--dbx-border);
-  background: color-mix(in srgb, #c47d00 12%, var(--dbx-surface));
-  color: var(--vscode-editorWarning-foreground, #9a6700);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.duckdb-footer-hint {
-  flex: 1 1 100%;
-  font-size: 11px;
-  color: var(--dbx-muted);
-}
-
-.duckdb-count-btn {
-  border: 1px solid var(--dbx-border);
-  border-radius: 2px;
-  background: var(--dbx-surface);
-  color: var(--dbx-fg);
-  font: inherit;
-  font-size: 11px;
-  padding: 3px 8px;
-  cursor: pointer;
-}
-
-.duckdb-count-btn:hover:not(:disabled) {
-  background: var(--dbx-hover);
-  border-color: var(--dbx-accent);
-  color: var(--dbx-accent);
-}
-
-.duckdb-count-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
 .duckdb-footer-actions {
   display: flex;
   align-items: center;
@@ -74,6 +37,7 @@
 .duckdb-footer-search {
   display: flex;
   align-items: center;
+  gap: 6px;
 }
 
 .duckdb-footer-search .duckdb-search {
@@ -101,9 +65,15 @@
   opacity: 0.85;
 }
 
-.duckdb-search-btn:hover {
+.duckdb-search-btn:hover,
+.duckdb-search-btn.duckdb-search-active {
   background: var(--dbx-hover);
   border-color: var(--dbx-accent);
+  color: var(--dbx-accent);
+}
+
+.duckdb-search-btn.duckdb-search-active .duckdb-search-icon {
+  opacity: 1;
 }
 
 .duckdb-hidden {
