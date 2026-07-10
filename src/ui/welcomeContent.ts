@@ -311,19 +311,11 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
 
   <section id="kernel">
     <h2>Kernel &amp; sessions</h2>
-    <p>Each notebook uses one of two kernel controllers:</p>
-    <table>
-      <thead><tr><th>Controller</th><th>When</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Select Spark Session…</strong></td><td>Notebook is not connected</td></tr>
-        <tr><td><strong>AWS Spark PySpark</strong></td><td>Notebook is bound to a session (label shows EMR or Glue backend)</td></tr>
-      </tbody>
-    </table>
+    <p>Each notebook uses the <strong>AWS Spark PySpark</strong> controller. When no session is bound, running a cell opens the Spark backend picker directly.</p>
     <p>Connect via:</p>
     <ul>
-      <li>Kernel picker → choose backend → select or create a session</li>
-      <li><strong>Connect to EMR Serverless Session</strong> or <strong>Connect to Glue Session</strong></li>
       <li>Run a cell while disconnected (prompts for backend and session)</li>
+      <li><strong>Select Kernel</strong> / <strong>Connect to EMR Serverless Session</strong> / <strong>Connect to Glue Session</strong></li>
       <li>Attach from the Applications or Glue Sessions sidebar</li>
     </ul>
     <p><strong>Disconnect Notebook Session</strong> unbinds the notebook but leaves the remote session running.</p>
