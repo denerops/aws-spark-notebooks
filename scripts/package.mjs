@@ -8,7 +8,7 @@
  *   node scripts/package.mjs [--out DIR] [--pre-release] [--skip-build]
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,9 +44,7 @@ function ensureExtensionIcon() {
     return;
   }
 
-  const needsPng =
-    !existsSync(pngPath) ||
-    statSync(svgPath).mtimeMs > statSync(pngPath).mtimeMs;
+  const needsPng = !existsSync(pngPath);
 
   if (!needsPng) {
     return;

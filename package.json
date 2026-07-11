@@ -283,7 +283,7 @@
         {
           "id": "emr-serverless-explorer",
           "title": "AWS Spark",
-          "icon": "media/emr-serverless.svg"
+          "icon": "media/emr-serverless-mono.svg"
         }
       ]
     },
@@ -292,7 +292,7 @@
         {
           "id": "emrServerlessApplications",
           "name": "EMR Applications",
-          "icon": "media/emr-serverless.svg"
+          "icon": "media/emr-serverless-mono.svg"
         },
         {
           "id": "glueInteractiveSessions",
