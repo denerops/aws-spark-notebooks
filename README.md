@@ -429,8 +429,11 @@ Or add a repository secret `GH_ADMIN_PAT` (admin + Actions scope) and run the **
 This configures:
 
 - Required status checks on `main` (`verify`, `semantic-pull-request`) via repository ruleset
+- Repository **Admin** role bypass so release automation (via `GH_ADMIN_PAT`) can push version/changelog commits to `main`
 - Legacy branch protection removed to avoid duplicate required checks
 - The least restrictive workflow approval policy available via API (`first_time_contributors_new_to_github`)
+
+The **Release** workflow needs repository secret `GH_ADMIN_PAT` (admin user PAT with `contents` write). The default `GITHUB_TOKEN` cannot bypass rulesets on personal repositories.
 
 **Workflow approval prompts:** GitHub may still ask you to click **Approve and run** when a PR modifies files under `.github/workflows/`. That is a platform security control and cannot be fully disabled. Same-repo PRs from contributors who already have merged work should otherwise run automatically.
 

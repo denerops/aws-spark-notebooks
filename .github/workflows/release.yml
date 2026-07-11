@@ -23,6 +23,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          # Admin PAT bypasses the main ruleset so @semantic-release/git can push.
+          token: ${{ secrets.GH_ADMIN_PAT }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,6 +40,8 @@ jobs:
 
       - name: Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Must be an admin-scoped PAT (not GITHUB_TOKEN): personal repos cannot
+          # add the GitHub Actions app as a ruleset bypass actor.
+          GITHUB_TOKEN: ${{ secrets.GH_ADMIN_PAT }}
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: npx semantic-release

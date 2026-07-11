@@ -9,9 +9,10 @@
 #
 # What this configures:
 #   1. Repository ruleset on main — merge blocked until CI job checks pass
-#   2. Removes legacy branch protection (avoids duplicate required checks)
-#   3. Most permissive workflow approval policy allowed by GitHub's API
-#   4. Private-repo fork PR workflows without maintainer approval (if applicable)
+#   2. Admin role bypass on that ruleset (semantic-release via GH_ADMIN_PAT)
+#   3. Removes legacy branch protection (avoids duplicate required checks)
+#   4. Most permissive workflow approval policy allowed by GitHub's API
+#   5. Private-repo fork PR workflows without maintainer approval (if applicable)
 set -euo pipefail
 
 OWNER=""
@@ -181,6 +182,7 @@ Merge to main is now blocked until these GitHub Actions job checks pass:
 
 Notes:
   - Required check names must match workflow job ids (not the UI label with workflow prefix).
+  - Repository Admins can bypass the ruleset (Release uses GH_ADMIN_PAT to push chore(release) commits).
   - Legacy branch protection was removed to avoid duplicate "Expected" checks.
   - GitHub may still require one manual "Approve and run" when a PR changes .github/workflows/.
 
