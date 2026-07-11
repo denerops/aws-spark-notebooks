@@ -27,6 +27,21 @@ function findOpenSparknb(): vscode.NotebookDocument | undefined {
   return vscode.workspace.notebookDocuments.find((nb) => isEmrSparkNotebook(nb));
 }
 
+const ACTIVE_GLUE_SESSION_STATUSES = new Set(['READY', 'PROVISIONING']);
+
+async function deleteGlueSession(sessionId: string): Promise<void> {
+  const service = getGlueSessionService();
+  try {
+    const summary = await service.getSession(sessionId);
+    if (ACTIVE_GLUE_SESSION_STATUSES.has(summary.status)) {
+      await service.stopSession(sessionId).catch(() => undefined);
+    }
+  } catch {
+    // Session may already be stopped or removed; still attempt delete.
+  }
+  await service.deleteSession(sessionId);
+}
+
 async function resolveNotebookForAttach(sessionId: string): Promise<vscode.NotebookDocument> {
   const active = getActiveSparknb();
   if (active) {
@@ -126,6 +141,38 @@ export function registerGlueSessionsActions(
         }
 
         vscode.window.showInformationMessage(`Glue session ${sessionId} stopped.`);
+        tree.refresh();
+        void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(message);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('glueInteractive.deleteSession', async (item) => {
+      const sessionId = item?.context?.sessionId as string | undefined;
+      if (!sessionId) {
+        return;
+      }
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete Glue session ${sessionId}? This permanently removes the session and cannot be undone.`,
+        { modal: true },
+        'Delete'
+      );
+      if (confirm !== 'Delete') {
+        return;
+      }
+      try {
+        await deleteGlueSession(sessionId);
+
+        const notebooks = await connectionManager.detachNotebooksForSession(sessionId);
+        for (const notebook of notebooks) {
+          kernelManager?.updateKernelAppearance(notebook);
+        }
+
+        vscode.window.showInformationMessage(`Glue session ${sessionId} deleted.`);
         tree.refresh();
         void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
       } catch (error) {

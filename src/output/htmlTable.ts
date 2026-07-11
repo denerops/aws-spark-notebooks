@@ -18,7 +18,7 @@ export function buildHtmlTable(payload: QueryResultPayload): string {
   const headerCells = payload.columns
     .map(
       (col, i) =>
-        `<th class="duckdb-sortable"><span class="duckdb-th-inner"><span class="duckdb-col-name">${escapeHtml(col)}</span><span class="duckdb-col-type ${colStyles[i].className}">${escapeHtml(colStyles[i].label)}</span></span></th>`
+        `<th class="duckdb-sortable"><span class="duckdb-th-inner"><span class="duckdb-col-name">${escapeHtml(col)}</span><span class="${colStyles[i].className}">${escapeHtml(colStyles[i].label)}</span></span></th>`
     )
     .join('');
 
@@ -37,11 +37,8 @@ export function buildHtmlTable(payload: QueryResultPayload): string {
 }
 
 function formatStaticRowLabel(payload: QueryResultPayload): string {
-  if (payload.countExact) {
-    return `${payload.rowCount.toLocaleString()} row(s)${payload.truncated ? ' · display limited' : ''}`;
-  }
   if (payload.truncated) {
-    return `Showing ${payload.rowCount.toLocaleString()}+ rows · count skipped`;
+    return `Showing ${payload.rowCount.toLocaleString()}+ rows`;
   }
   return `${payload.rowCount.toLocaleString()} row(s)`;
 }

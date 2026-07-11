@@ -224,7 +224,7 @@ export class ConfigTreeProvider implements vscode.TreeDataProvider<ConfigTreeIte
       if (this.emrPresets.length === 0) {
         return [
           new ConfigTreeItem('presetEmpty', 'No EMR session presets', vscode.TreeItemCollapsibleState.None, {
-            description: 'Use + EMR in toolbar',
+            description: 'Use + on EMR Session Presets',
           }),
         ];
       }
@@ -235,7 +235,7 @@ export class ConfigTreeProvider implements vscode.TreeDataProvider<ConfigTreeIte
       if (this.gluePresets.length === 0) {
         return [
           new ConfigTreeItem('presetEmpty', 'No Glue session presets', vscode.TreeItemCollapsibleState.None, {
-            description: 'Use + Glue in toolbar',
+            description: 'Use + on Glue Session Presets',
           }),
         ];
       }

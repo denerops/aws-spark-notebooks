@@ -85,6 +85,33 @@ export function registerSessionPresetsActions(
 
   context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.openWorkspacePresetsFile', async () => {
+      const pick = await vscode.window.showQuickPick(
+        [
+          {
+            label: 'EMR Serverless',
+            description: '.vscode/emr-serverless-presets.json',
+            backend: 'emr' as const,
+          },
+          {
+            label: 'Glue Interactive',
+            description: '.vscode/glue-interactive-presets.json',
+            backend: 'glue' as const,
+          },
+        ],
+        {
+          title: 'Open workspace presets file',
+          placeHolder: 'Choose which presets file to open',
+        }
+      );
+      if (!pick) {
+        return;
+      }
+
+      if (pick.backend === 'glue') {
+        await vscode.commands.executeCommand('glueInteractive.openWorkspacePresetsFile');
+        return;
+      }
+
       const uri = getWorkspacePresetsUri();
       if (!uri) {
         vscode.window.showWarningMessage('Open a workspace folder to edit team session presets.');

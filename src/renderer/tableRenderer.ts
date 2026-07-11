@@ -17,18 +17,9 @@ interface ErrorPayload {
 
 type SortDir = 'asc' | 'desc' | null;
 
-interface CountResultMessage {
-  type: 'countResult';
-  outputItemId: string;
-  rowCount?: number;
-  error?: string;
-}
-
 interface OutputViewState {
   payload: QueryResultPayload;
   footerLeft: HTMLSpanElement;
-  countButton?: HTMLButtonElement;
-  banner?: HTMLDivElement;
 }
 
 const outputViews = new Map<string, OutputViewState>();
@@ -63,11 +54,6 @@ function formatRowSummary(payload: QueryResultPayload, filteredVisible?: number)
     return `${filteredVisible.toLocaleString()} of ${payload.rows.length.toLocaleString()} rows shown`;
   }
 
-  if (payload.countExact) {
-    return `${payload.rowCount.toLocaleString()} row(s)`;
-  }
-
-  const limit = payload.displayLimit ?? payload.rows.length;
   if (payload.truncated) {
     return `Showing ${payload.rowCount.toLocaleString()}+ rows`;
   }
@@ -75,44 +61,8 @@ function formatRowSummary(payload: QueryResultPayload, filteredVisible?: number)
   return `${payload.rowCount.toLocaleString()} row(s)`;
 }
 
-function formatRowHint(payload: QueryResultPayload): string | undefined {
-  if (payload.countExact) {
-    return payload.truncated
-      ? `Display limited to ${(payload.displayLimit ?? payload.rows.length).toLocaleString()} rows`
-      : undefined;
-  }
-
-  if (payload.truncated) {
-    return 'Full row count skipped to avoid an expensive table scan';
-  }
-
-  return undefined;
-}
-
 function applyPayloadToView(state: OutputViewState): void {
-  const { payload, footerLeft, countButton, banner } = state;
-  footerLeft.textContent = formatRowSummary(payload);
-
-  if (banner) {
-    if (payload.truncated && !payload.countExact) {
-      banner.classList.remove('duckdb-hidden');
-      banner.textContent =
-        'More rows exist than shown. A full count was not run automatically — use Count all rows if you need the exact total.';
-    } else {
-      banner.classList.add('duckdb-hidden');
-    }
-  }
-
-  if (countButton) {
-    if (payload.countExact || !payload.countCode) {
-      countButton.classList.add('duckdb-hidden');
-      countButton.disabled = true;
-    } else {
-      countButton.classList.remove('duckdb-hidden');
-      countButton.disabled = false;
-      countButton.textContent = 'Count all rows';
-    }
-  }
+  state.footerLeft.textContent = formatRowSummary(state.payload);
 }
 
 const COPY_ICON_SVG =
@@ -200,36 +150,7 @@ function renderErrorOutput(outputItem: { id: string; json(): unknown }, element:
   root.append(card);
 }
 
-export const activate: ActivationFunction = (context) => {
-  context.onDidReceiveMessage?.((message: CountResultMessage) => {
-    if (message?.type !== 'countResult' || !message.outputItemId) {
-      return;
-    }
-
-    const state = outputViews.get(message.outputItemId);
-    if (!state) {
-      return;
-    }
-
-    if (message.error) {
-      if (state.countButton) {
-        state.countButton.disabled = false;
-        state.countButton.textContent = 'Count all rows';
-      }
-      return;
-    }
-
-    if (message.rowCount !== undefined) {
-      state.payload = {
-        ...state.payload,
-        rowCount: message.rowCount,
-        countExact: true,
-        truncated: message.rowCount > state.payload.rows.length,
-      };
-      applyPayloadToView(state);
-    }
-  });
-
+export const activate: ActivationFunction = () => {
   return {
     disposeOutputItem(id) {
       if (id) {
@@ -275,10 +196,6 @@ export const activate: ActivationFunction = (context) => {
       const card = document.createElement('div');
       card.className = 'duckdb-result-card';
 
-      const banner = document.createElement('div');
-      banner.className = 'duckdb-table-banner duckdb-hidden';
-      card.append(banner);
-
       const scroll = document.createElement('div');
       scroll.className = 'duckdb-table-scroll';
       const table = document.createElement('table');
@@ -295,7 +212,7 @@ export const activate: ActivationFunction = (context) => {
         const th = document.createElement('th');
         th.className = 'duckdb-sortable';
         th.dataset.col = String(i);
-        th.innerHTML = `<span class="duckdb-th-inner"><span class="duckdb-col-name">${payload.columns[i]}</span><span class="duckdb-col-type ${colStyles[i].className}">${colStyles[i].label}</span></span><span class="duckdb-sort-icon">↕</span>`;
+        th.innerHTML = `<span class="duckdb-th-inner"><span class="duckdb-col-name">${payload.columns[i]}</span><span class="${colStyles[i].className}">${colStyles[i].label}</span></span><span class="duckdb-sort-icon">↕</span>`;
         headerCells.push(th);
         headerRow.append(th);
       }
@@ -305,28 +222,57 @@ export const activate: ActivationFunction = (context) => {
       const footer = document.createElement('div');
       footer.className = 'duckdb-footer';
       const footerLeft = document.createElement('span');
-      const footerHint = document.createElement('span');
-      footerHint.className = 'duckdb-footer-hint';
       const footerActions = document.createElement('div');
       footerActions.className = 'duckdb-footer-actions';
 
-      const countButton = document.createElement('button');
-      countButton.type = 'button';
-      countButton.className = 'duckdb-count-btn';
-      countButton.textContent = 'Count all rows';
-      countButton.addEventListener('click', () => {
-        if (!payload.countCode || !context.postMessage) {
-          return;
-        }
-        countButton.disabled = true;
-        countButton.textContent = 'Counting…';
-        context.postMessage({
-          type: 'countRows',
-          countCode: payload.countCode,
-          outputItemId: outputItem.id,
-        });
+      const searchWrap = document.createElement('div');
+      searchWrap.className = 'duckdb-footer-search';
+
+      const searchInput = document.createElement('input');
+      searchInput.type = 'search';
+      searchInput.className = 'duckdb-search duckdb-hidden';
+      searchInput.placeholder = 'Search in table…';
+      searchInput.setAttribute('aria-label', 'Search in displayed data');
+      searchInput.addEventListener('input', () => {
+        filter = searchInput.value.trim();
+        renderBody();
       });
-      footerActions.append(countButton);
+      searchInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          searchInput.value = '';
+          filter = '';
+          searchInput.classList.add('duckdb-hidden');
+          searchButton.classList.remove('duckdb-search-active');
+          searchButton.title = 'Search in displayed data';
+          renderBody();
+          searchButton.focus();
+        }
+      });
+
+      const searchButton = document.createElement('button');
+      searchButton.type = 'button';
+      searchButton.className = 'duckdb-search-btn';
+      searchButton.title = 'Search in displayed data';
+      searchButton.setAttribute('aria-label', 'Search in displayed data');
+      searchButton.innerHTML =
+        '<svg class="duckdb-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+      searchButton.addEventListener('click', () => {
+        const opening = searchInput.classList.contains('duckdb-hidden');
+        searchInput.classList.toggle('duckdb-hidden', !opening);
+        searchButton.classList.toggle('duckdb-search-active', opening);
+        searchButton.title = opening ? 'Hide search' : 'Search in displayed data';
+        if (opening) {
+          searchInput.focus();
+          searchInput.select();
+        } else if (filter) {
+          searchInput.value = '';
+          filter = '';
+          renderBody();
+        }
+      });
+
+      searchWrap.append(searchInput, searchButton);
+      footerActions.append(searchWrap);
 
       const footerRight = document.createElement('span');
       footerRight.className = 'duckdb-footer-time';
@@ -334,8 +280,6 @@ export const activate: ActivationFunction = (context) => {
       const viewState: OutputViewState = {
         payload: { ...payload },
         footerLeft,
-        countButton,
-        banner,
       };
       outputViews.set(outputItem.id, viewState);
       applyPayloadToView(viewState);
@@ -344,9 +288,6 @@ export const activate: ActivationFunction = (context) => {
         footerLeft.textContent = filter
           ? formatRowSummary(viewState.payload, visibleCount)
           : formatRowSummary(viewState.payload);
-        const hint = formatRowHint(viewState.payload);
-        footerHint.textContent = hint ?? '';
-        footerHint.classList.toggle('duckdb-hidden', !hint);
         footerRight.textContent = `${viewState.payload.executionTimeMs} ms`;
       }
 
@@ -391,7 +332,7 @@ export const activate: ActivationFunction = (context) => {
           const td = document.createElement('td');
           td.colSpan = payload.columns.length + 1;
           td.className = 'duckdb-empty';
-          td.textContent = filter ? 'No rows match your filter.' : 'No rows returned.';
+          td.textContent = filter ? 'No rows match your search.' : 'No rows returned.';
           tr.append(td);
           tbody.append(tr);
         }
@@ -418,7 +359,7 @@ export const activate: ActivationFunction = (context) => {
 
       table.append(thead, tbody);
       scroll.append(table);
-      footer.append(footerLeft, footerHint, footerActions, footerRight);
+      footer.append(footerLeft, footerActions, footerRight);
       card.append(scroll, footer);
       root.append(card);
       renderBody();

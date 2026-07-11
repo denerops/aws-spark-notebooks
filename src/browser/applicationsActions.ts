@@ -83,6 +83,47 @@ export function registerApplicationsActions(
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
+      'emrServerless.markSessionCreating',
+      (applicationId?: string, sessionName?: string) => {
+        if (!applicationId) {
+          return;
+        }
+        tree.markSessionCreating(applicationId, sessionName);
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'emrServerless.patchSessionProgress',
+      (
+        applicationId?: string,
+        info?: {
+          id: number;
+          state: string;
+          name?: string;
+          kind?: string;
+          owner?: string;
+          appId?: string;
+        }
+      ) => {
+        if (!applicationId || !info) {
+          return;
+        }
+        tree.upsertSession(applicationId, {
+          id: info.id,
+          state: info.state,
+          name: info.name,
+          kind: info.kind ?? 'pyspark',
+          owner: info.owner,
+          appId: info.appId,
+        });
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
       'emrServerless.startApplication',
       async (item?: ApplicationsTreeItem) => {
         const appId = item?.context.applicationId;
@@ -90,16 +131,21 @@ export function registerApplicationsActions(
           return;
         }
         try {
+          tree.patchApplicationState(appId, 'STARTING');
           await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
               title: `Starting application ${appId}…`,
             },
-            () => getEmrServerlessService().startApplication(appId)
+            () =>
+              getEmrServerlessService().startApplication(appId, (state) =>
+                tree.patchApplicationState(appId, state)
+              )
           );
           vscode.window.showInformationMessage(`Application ${appId} started.`);
           tree.refresh();
         } catch (error) {
+          tree.refresh();
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
         }
@@ -124,16 +170,28 @@ export function registerApplicationsActions(
           return;
         }
         try {
+          tree.patchApplicationState(appId, 'STOPPING');
           await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
               title: `Stopping application ${appId}…`,
             },
-            () => getEmrServerlessService().stopApplication(appId)
+            () =>
+              getEmrServerlessService().stopApplication(appId, (state) =>
+                tree.patchApplicationState(appId, state)
+              )
           );
+
+          const notebooks = await connectionManager.detachNotebooksForApplication(appId);
+          for (const notebook of notebooks) {
+            kernelManager?.updateKernelAppearance(notebook);
+          }
+
           vscode.window.showInformationMessage(`Application ${appId} stopped.`);
           tree.refresh();
+          void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
         } catch (error) {
+          tree.refresh();
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
         }
@@ -158,16 +216,28 @@ export function registerApplicationsActions(
           return;
         }
         try {
+          tree.patchApplicationState(appId, 'STOPPING');
           await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
               title: `Restarting application ${appId}…`,
             },
-            () => getEmrServerlessService().restartApplication(appId)
+            () =>
+              getEmrServerlessService().restartApplication(appId, (state) =>
+                tree.patchApplicationState(appId, state)
+              )
           );
+
+          const notebooks = await connectionManager.detachNotebooksForApplication(appId);
+          for (const notebook of notebooks) {
+            kernelManager?.updateKernelAppearance(notebook);
+          }
+
           vscode.window.showInformationMessage(`Application ${appId} restarted.`);
           tree.refresh();
+          void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
         } catch (error) {
+          tree.refresh();
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
         }
@@ -268,10 +338,10 @@ export function registerApplicationsActions(
         const targetNotebook = findOpenSparknb();
 
         if (targetNotebook) {
-          const existing = connectionManager.getSession(targetNotebook);
-          if (existing?.applicationId === appId && existing.isReady) {
+          const existing = await connectionManager.getLiveBinding(targetNotebook);
+          if (existing?.applicationId === appId) {
             const reuse = await vscode.window.showInformationMessage(
-              `This notebook is already connected to session ${existing.sessionId}.`,
+              `This notebook is already connected to session ${existing.session.sessionId}.`,
               'Open Spark UI',
               'Create Another Session'
             );
@@ -279,7 +349,9 @@ export function registerApplicationsActions(
               await vscode.commands.executeCommand('emrServerless.openSparkUi');
               return;
             }
-            if (reuse !== 'Create Another Session') {
+            if (reuse === 'Create Another Session') {
+              await connectionManager.disconnectNotebook(targetNotebook);
+            } else {
               return;
             }
           }
@@ -298,6 +370,26 @@ export function registerApplicationsActions(
             return;
           }
 
+          const onProgress = (info: {
+            id: number;
+            state: string;
+            name?: string;
+            kind?: string;
+            owner?: string;
+            appId?: string;
+          }) => {
+            tree.upsertSession(appId, {
+              id: info.id,
+              state: info.state,
+              name: info.name ?? sessionName,
+              kind: info.kind ?? 'pyspark',
+              owner: info.owner,
+              appId: info.appId,
+            });
+          };
+
+          tree.markSessionCreating(appId, sessionName);
+
           const session = await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
@@ -310,11 +402,17 @@ export function registerApplicationsActions(
                   targetNotebook,
                   appId,
                   preset,
-                  sessionName
+                  sessionName,
+                  onProgress
                 );
                 return binding.session;
               }
-              return connectionManager.createStandaloneSession(appId, preset, sessionName);
+              return connectionManager.createStandaloneSession(
+                appId,
+                preset,
+                sessionName,
+                onProgress
+              );
             }
           );
 
@@ -334,6 +432,8 @@ export function registerApplicationsActions(
           });
           tree.refresh();
         } catch (error) {
+          tree.clearSessionCreating(appId);
+          tree.refresh();
           const message = error instanceof Error ? error.message : String(error);
           if (message.includes('already being created')) {
             vscode.window.showInformationMessage(message);

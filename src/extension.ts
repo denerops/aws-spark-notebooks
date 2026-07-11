@@ -27,7 +27,6 @@ import { resetEmrServerlessService } from './aws/emrServerlessClient';
 import { resetGlueSessionService } from './glue/glueSessionService';
 import { getSessionPresetStore } from './session/presets';
 import { getGlueSessionPresetStore } from './glue/presets';
-import { registerTableRendererMessaging } from './output/tableCountMessaging';
 import { registerWelcomePage, showWelcomeOnFirstInstall } from './ui/welcomePage';
 
 let connectionHub: NotebookConnectionHub;
@@ -62,7 +61,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   registerGlueSessionsActions(context, glueConnectionManager, glueSessionsTree, kernelManager);
   registerSessionPresetsActions(context, emrPresetStore, configTree);
   registerGluePresetsActions(context, gluePresetStore, configTree);
-  registerTableRendererMessaging(context, connectionHub);
   registerWelcomePage(context);
 
   context.subscriptions.push(statusBar);

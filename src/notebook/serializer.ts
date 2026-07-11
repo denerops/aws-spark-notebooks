@@ -330,7 +330,11 @@ export function registerSerializer(context: vscode.ExtensionContext): void {
       if (event.notebook.notebookType !== NOTEBOOK_TYPE) {
         return;
       }
-      if (event.contentChanges.length === 0 && event.cellChanges.length === 0) {
+      if (
+        event.contentChanges.length === 0 &&
+        event.cellChanges.length === 0 &&
+        event.metadata === undefined
+      ) {
         return;
       }
       serializer.markDirty(event.notebook.uri);
@@ -347,8 +351,8 @@ export function registerSerializer(context: vscode.ExtensionContext): void {
       transientDocumentMetadata: {
         kernelspec: true,
         language_info: true,
-        emrServerless: true,
-        glueInteractive: true,
+        // Persist emrServerless / glueInteractive so reopened notebooks
+        // can reattach to a still-running session without prompting.
       },
     })
   );

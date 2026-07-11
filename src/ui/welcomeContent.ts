@@ -253,7 +253,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
         <tr><td>Restart application</td><td>Context menu on a running application</td></tr>
         <tr><td>New Livy session</td><td>Context menu on running app → pick an EMR session preset</td></tr>
         <tr><td>Attach to session</td><td>Link icon on a session row</td></tr>
-        <tr><td>Open Spark UI</td><td>Globe icon on session row or view toolbar</td></tr>
+        <tr><td>Open Spark UI</td><td>Globe icon on a session row</td></tr>
         <tr><td>Stop session</td><td>Context menu on a session row</td></tr>
       </tbody>
     </table>
@@ -268,7 +268,6 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
         <tr><td>Refresh list</td><td>Toolbar refresh on Glue Sessions view</td></tr>
         <tr><td>New Glue session</td><td>Toolbar <strong>+</strong> → pick a Glue session preset</td></tr>
         <tr><td>Attach to session</td><td>Link icon on a ready session row</td></tr>
-        <tr><td>Open Spark UI</td><td>Globe icon on session row or view toolbar</td></tr>
         <tr><td>Stop session</td><td>Context menu on a session row</td></tr>
       </tbody>
     </table>
@@ -286,7 +285,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
         <tr><td>2</td><td><em>preset name</em></td><td>Click to edit — scope shown in description; repo/account icon</td></tr>
       </tbody>
     </table>
-    <p>Changing profile or region disconnects open notebook sessions. Toolbar: refresh, new EMR preset, new Glue preset, open workspace presets files.</p>
+    <p>Changing profile or region disconnects open notebook sessions. Toolbar: refresh, open workspace presets file. Use <strong>+</strong> on <strong>EMR Session Presets</strong> or <strong>Glue Session Presets</strong> to create a new preset.</p>
     <p>Team preset files: <code>.vscode/emr-serverless-presets.json</code> (EMR) and <code>.vscode/glue-interactive-presets.json</code> (Glue).</p>
   </section>
 
@@ -312,19 +311,11 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
 
   <section id="kernel">
     <h2>Kernel &amp; sessions</h2>
-    <p>Each notebook uses one of two kernel controllers:</p>
-    <table>
-      <thead><tr><th>Controller</th><th>When</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Select Spark Session…</strong></td><td>Notebook is not connected</td></tr>
-        <tr><td><strong>AWS Spark PySpark</strong></td><td>Notebook is bound to a session (label shows EMR or Glue backend)</td></tr>
-      </tbody>
-    </table>
+    <p>Each notebook uses the <strong>AWS Spark PySpark</strong> controller. When no session is bound, running a cell opens the Spark backend picker directly.</p>
     <p>Connect via:</p>
     <ul>
-      <li>Kernel picker → choose backend → select or create a session</li>
-      <li><strong>Connect to EMR Serverless Session</strong> or <strong>Connect to Glue Session</strong></li>
       <li>Run a cell while disconnected (prompts for backend and session)</li>
+      <li><strong>Select Kernel</strong> / <strong>Connect to EMR Serverless Session</strong> / <strong>Connect to Glue Session</strong></li>
       <li>Attach from the Applications or Glue Sessions sidebar</li>
     </ul>
     <p><strong>Disconnect Notebook Session</strong> unbinds the notebook but leaves the remote session running.</p>
@@ -346,7 +337,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
     <ul>
       <li>Interactive tables with sort, column filter, and CSV export</li>
       <li>Row limit controlled by <code>emrServerless.maxRows</code> (default 1000)</li>
-      <li>Only <code>limit + 1</code> rows are fetched — no automatic full <code>count()</code></li>
+      <li>Only <code>limit + 1</code> rows are fetched for display</li>
     </ul>
   </section>
 
@@ -355,7 +346,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
     <ul>
       <li>Spark UI links appear in cell output and the status bar when a session is connected</li>
       <li><strong>Open Spark UI</strong> opens the dashboard in your browser</li>
-      <li>Globe icon on session rows in the Applications and Glue Sessions sidebars</li>
+      <li>Globe icon on session rows in the Applications sidebar</li>
       <li>URLs expire after about one hour — refresh from the sidebar or use <strong>Refresh Spark UI Link</strong> (EMR)</li>
     </ul>
   </section>
@@ -366,7 +357,6 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
       <thead><tr><th>Item</th><th>Description</th></tr></thead>
       <tbody>
         <tr><td><code>$(globe) Spark UI</code></td><td>Open Spark UI (when a notebook is connected)</td></tr>
-        <tr><td><code>$(question) Spark Help</code></td><td>Open this documentation</td></tr>
       </tbody>
     </table>
     <p>AWS profile and region are in the <strong>Config</strong> sidebar view.</p>

@@ -137,13 +137,37 @@ export async function selectEmrKernel(
       if (!sessionName) {
         return false;
       }
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: `Creating session "${sessionName}" (${preset.name})…`,
-        },
-        () => connectionManager.createSession(notebook, appPick.app.id, preset, sessionName)
+      void vscode.commands.executeCommand(
+        'emrServerless.markSessionCreating',
+        appPick.app.id,
+        sessionName
       );
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Creating session "${sessionName}" (${preset.name})…`,
+          },
+          () =>
+            connectionManager.createSession(
+              notebook,
+              appPick.app.id,
+              preset,
+              sessionName,
+              (info) => {
+                void vscode.commands.executeCommand(
+                  'emrServerless.patchSessionProgress',
+                  appPick.app.id,
+                  info
+                );
+              }
+            )
+        );
+      } catch (error) {
+        void vscode.commands.executeCommand('emrServerless.refreshApplications');
+        throw error;
+      }
+      void vscode.commands.executeCommand('emrServerless.refreshApplications');
       const session = connectionManager.getSession(notebook);
       vscode.window
         .showInformationMessage(

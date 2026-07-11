@@ -5,20 +5,13 @@ import type { NotebookConnectionHub } from '../platform/connectionHub';
 import { selectEmrKernel } from '../ui/kernelSelection';
 import { pickSparkBackend, selectGlueKernel } from '../ui/glueKernelSelection';
 import { SparknbController } from './controller';
-import {
-  CONTROLLER_ID,
-  KERNEL_SELECT_CONTROLLER_ID,
-  NOTEBOOK_TYPE,
-  isEmrSparkNotebook,
-} from './types';
+import { CONTROLLER_ID, NOTEBOOK_TYPE, isEmrSparkNotebook } from './types';
 import { formatLivySessionLabel } from '../livy/types';
 import { formatGlueSessionLabel } from '../glue/types';
 
 export class EmrKernelManager implements vscode.Disposable {
   private readonly mainController: vscode.NotebookController;
-  private readonly selectController: vscode.NotebookController;
   private readonly sparkController: SparknbController;
-  private readonly skipKernelPromptOnSelect = new Set<string>();
 
   constructor(
     private readonly connectionHub: NotebookConnectionHub,
@@ -38,47 +31,14 @@ export class EmrKernelManager implements vscode.Disposable {
     this.mainController.executeHandler = (cells, notebook) =>
       this.handleExecute(cells, notebook);
 
-    this.selectController = vscode.notebooks.createNotebookController(
-      KERNEL_SELECT_CONTROLLER_ID,
-      NOTEBOOK_TYPE,
-      'Select Spark Session…'
-    );
-    this.selectController.supportedLanguages = ['python', 'sql'];
-    this.selectController.supportsExecutionOrder = true;
-    this.selectController.description = 'Choose EMR Serverless or Glue Interactive session';
-    this.selectController.executeHandler = (cells, notebook) =>
-      this.handleSelectKernelExecute(cells, notebook);
-
-    this.selectController.onDidChangeSelectedNotebooks((event) => {
-      if (!event.selected || !isEmrSparkNotebook(event.notebook)) {
-        return;
-      }
-
-      const key = event.notebook.uri.toString();
-      if (this.skipKernelPromptOnSelect.delete(key)) {
-        return;
-      }
-
-      if (!this.isNotebookConnected(event.notebook)) {
-        void this.promptKernelSelection(event.notebook);
-      }
-    });
-
     context.subscriptions.push(
       this.mainController,
-      this.selectController,
       this.sparkController,
       vscode.workspace.onDidOpenNotebookDocument((notebook) => {
         if (!isEmrSparkNotebook(notebook)) {
           return;
         }
-        if (!this.isNotebookConnected(notebook)) {
-          this.skipKernelPromptOnSelect.add(notebook.uri.toString());
-        }
         this.updateKernelAppearance(notebook);
-      }),
-      vscode.workspace.onDidCloseNotebookDocument((notebook) => {
-        this.skipKernelPromptOnSelect.delete(notebook.uri.toString());
       })
     );
 
@@ -95,6 +55,33 @@ export class EmrKernelManager implements vscode.Disposable {
 
   private isNotebookConnected(notebook: vscode.NotebookDocument): boolean {
     return this.connectionHub.isConnected(notebook);
+  }
+
+  /** Prefer a live binding; otherwise try metadata reattach, then the session picker. */
+  private async ensureSessionOrPrompt(
+    notebook: vscode.NotebookDocument,
+    backend?: 'emr' | 'glue'
+  ): Promise<boolean> {
+    if (
+      !backend &&
+      (this.isNotebookConnected(notebook) || this.connectionHub.resolveBackend(notebook))
+    ) {
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Reconnecting to Spark session…',
+          },
+          () => this.connectionHub.ensureConnected(notebook)
+        );
+        this.updateKernelAppearance(notebook);
+        return true;
+      } catch {
+        // Stale binding/metadata or dead session — fall through to picker.
+      }
+    }
+
+    return this.promptKernelSelection(notebook, backend);
   }
 
   async promptKernelSelection(
@@ -148,10 +135,6 @@ export class EmrKernelManager implements vscode.Disposable {
         notebook,
         vscode.NotebookControllerAffinity.Preferred
       );
-      this.selectController.updateNotebookAffinity(
-        notebook,
-        vscode.NotebookControllerAffinity.Default
-      );
       return;
     }
 
@@ -164,10 +147,6 @@ export class EmrKernelManager implements vscode.Disposable {
       this.mainController.updateNotebookAffinity(
         notebook,
         vscode.NotebookControllerAffinity.Preferred
-      );
-      this.selectController.updateNotebookAffinity(
-        notebook,
-        vscode.NotebookControllerAffinity.Default
       );
       return;
     }
@@ -189,10 +168,6 @@ export class EmrKernelManager implements vscode.Disposable {
         notebook,
         vscode.NotebookControllerAffinity.Preferred
       );
-      this.selectController.updateNotebookAffinity(
-        notebook,
-        vscode.NotebookControllerAffinity.Default
-      );
       return;
     }
 
@@ -213,71 +188,34 @@ export class EmrKernelManager implements vscode.Disposable {
         notebook,
         vscode.NotebookControllerAffinity.Preferred
       );
-      this.selectController.updateNotebookAffinity(
-        notebook,
-        vscode.NotebookControllerAffinity.Default
-      );
       return;
     }
 
     this.mainController.label = 'AWS Spark PySpark';
     this.mainController.description = 'No session selected';
     this.mainController.detail = 'Select an EMR or Glue session to run cells';
-    this.selectController.updateNotebookAffinity(
+    // Preferred affinity auto-selects this controller so Run Cell skips VS Code's
+    // kernel-source / kernel-list pickers and goes straight to our backend prompt.
+    this.mainController.updateNotebookAffinity(
       notebook,
       vscode.NotebookControllerAffinity.Preferred
     );
-    this.mainController.updateNotebookAffinity(
-      notebook,
-      vscode.NotebookControllerAffinity.Default
-    );
-  }
-
-  private async handleSelectKernelExecute(
-    cells: vscode.NotebookCell[],
-    notebook: vscode.NotebookDocument
-  ): Promise<void> {
-    if (!this.isNotebookConnected(notebook)) {
-      const connected = await this.promptKernelSelection(notebook);
-      if (!connected) {
-        if (cells.length > 0) {
-          await this.sparkController.failCells(
-            cells,
-            notebook,
-            this.selectController,
-            'No Spark session selected. Use the kernel picker to select an EMR Serverless or Glue Interactive session.'
-          );
-        }
-        return;
-      }
-    }
-
-    this.updateKernelAppearance(notebook);
-
-    if (cells.length > 0) {
-      // Must execute with the controller that received the run request (selectController).
-      await this.sparkController.executeCells(cells, notebook, this.selectController);
-      this.updateKernelAppearance(notebook);
-    }
   }
 
   private async handleExecute(
     cells: vscode.NotebookCell[],
     notebook: vscode.NotebookDocument
   ): Promise<void> {
-    if (!this.isNotebookConnected(notebook)) {
-      const connected = await this.promptKernelSelection(notebook);
-      if (!connected) {
-        await this.sparkController.failCells(
-          cells,
-          notebook,
-          this.mainController,
-          'No Spark session selected. Use the kernel picker to select an EMR Serverless or Glue Interactive session.'
-        );
-        return;
-      }
-      this.updateKernelAppearance(notebook);
+    if (!(await this.ensureSessionOrPrompt(notebook))) {
+      await this.sparkController.failCells(
+        cells,
+        notebook,
+        this.mainController,
+        'No Spark session selected. Use Select Kernel or run a cell to choose an EMR Serverless or Glue Interactive session.'
+      );
+      return;
     }
+    this.updateKernelAppearance(notebook);
 
     await this.sparkController.executeCells(cells, notebook, this.mainController);
     this.updateKernelAppearance(notebook);

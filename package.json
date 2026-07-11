@@ -234,6 +234,12 @@
         "category": "Glue Interactive"
       },
       {
+        "command": "glueInteractive.deleteSession",
+        "title": "Delete Glue Session",
+        "icon": "$(trash)",
+        "category": "Glue Interactive"
+      },
+      {
         "command": "glueInteractive.openSparkUi",
         "title": "Open Spark UI",
         "icon": "$(globe)",
@@ -277,7 +283,7 @@
         {
           "id": "emr-serverless-explorer",
           "title": "AWS Spark",
-          "icon": "media/emr-serverless.svg"
+          "icon": "media/emr-serverless-mono.svg"
         }
       ]
     },
@@ -286,7 +292,7 @@
         {
           "id": "emrServerlessApplications",
           "name": "EMR Applications",
-          "icon": "media/emr-serverless.svg"
+          "icon": "media/emr-serverless-mono.svg"
         },
         {
           "id": "glueInteractiveSessions",
@@ -356,24 +362,9 @@
           "group": "navigation"
         },
         {
-          "command": "emrServerless.newSessionPreset",
-          "when": "view == emrServerlessConfig",
-          "group": "navigation@1"
-        },
-        {
-          "command": "glueInteractive.newSessionPreset",
-          "when": "view == emrServerlessConfig",
-          "group": "navigation@2"
-        },
-        {
           "command": "emrServerless.openWorkspacePresetsFile",
           "when": "view == emrServerlessConfig",
           "group": "navigation@3"
-        },
-        {
-          "command": "glueInteractive.openWorkspacePresetsFile",
-          "when": "view == emrServerlessConfig",
-          "group": "navigation@4"
         },
         {
           "command": "emrServerless.openWelcome",
@@ -396,11 +387,6 @@
           "group": "navigation"
         },
         {
-          "command": "glueInteractive.openSparkUi",
-          "when": "view == glueInteractiveSessions",
-          "group": "navigation"
-        },
-        {
           "command": "emrServerless.openWelcome",
           "when": "view == glueInteractiveSessions",
           "group": "navigation@99"
@@ -414,14 +400,19 @@
           "command": "emrServerless.verifyAwsCredentials",
           "when": "view == emrServerlessApplications",
           "group": "navigation"
-        },
-        {
-          "command": "emrServerless.openSparkUi",
-          "when": "view == emrServerlessApplications",
-          "group": "navigation"
         }
       ],
       "view/item/context": [
+        {
+          "command": "emrServerless.newSessionPreset",
+          "when": "view == emrServerlessConfig && viewItem == emrPresetsRoot",
+          "group": "inline@1"
+        },
+        {
+          "command": "glueInteractive.newSessionPreset",
+          "when": "view == emrServerlessConfig && viewItem == gluePresetsRoot",
+          "group": "inline@1"
+        },
         {
           "command": "emrServerless.startApplication",
           "when": "view == emrServerlessApplications && viewItem == applicationStopped",
@@ -429,7 +420,7 @@
         },
         {
           "command": "emrServerless.stopApplication",
-          "when": "view == emrServerlessApplications && viewItem == applicationRunning",
+          "when": "view == emrServerlessApplications && (viewItem == applicationRunning || viewItem == applicationStarting)",
           "group": "inline@1"
         },
         {
@@ -449,7 +440,7 @@
         },
         {
           "command": "emrServerless.stopSession",
-          "when": "view == emrServerlessApplications && viewItem == session",
+          "when": "view == emrServerlessApplications && (viewItem == session || viewItem == sessionStarting)",
           "group": "2_destructive@1"
         },
         {
@@ -463,14 +454,14 @@
           "group": "inline@1"
         },
         {
-          "command": "glueInteractive.openSparkUi",
-          "when": "view == glueInteractiveSessions && viewItem == sessionReady",
-          "group": "inline@2"
-        },
-        {
           "command": "glueInteractive.stopSession",
           "when": "view == glueInteractiveSessions && (viewItem == sessionReady || viewItem == sessionProvisioning || viewItem == session)",
           "group": "2_destructive@1"
+        },
+        {
+          "command": "glueInteractive.deleteSession",
+          "when": "view == glueInteractiveSessions && (viewItem == sessionReady || viewItem == sessionProvisioning || viewItem == session || viewItem == sessionStopped)",
+          "group": "2_destructive@2"
         }
       ]
     },

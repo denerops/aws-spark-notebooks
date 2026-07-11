@@ -1,7 +1,6 @@
 export const NOTEBOOK_TYPE = 'emr-spark';
 export const SERIALIZER_ID = 'emr-spark-serializer';
 export const CONTROLLER_ID = 'emr-spark-controller';
-export const KERNEL_SELECT_CONTROLLER_ID = 'emr-spark-select-kernel';
 
 export function isEmrSparkNotebook(notebook?: { notebookType: string }): boolean {
   return notebook?.notebookType === NOTEBOOK_TYPE;

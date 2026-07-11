@@ -17,7 +17,7 @@ export interface QueryResultPayload {
 
 export function stringifyCell(value: unknown): string {
   if (value === null || value === undefined) {
-    return 'NULL';
+    return 'null';
   }
   if (typeof value === 'object') {
     try {
@@ -63,7 +63,7 @@ export function classifyColumn(rows: unknown[][], colIndex: number): CellKind {
 
 export function renderCellHtml(value: unknown, kind: CellKind): string {
   if (value === null || value === undefined) {
-    return '<span class="duckdb-null">NULL</span>';
+    return '<span class="duckdb-null">null</span>';
   }
   if (typeof value === 'boolean') {
     const cls = value ? 'duckdb-badge-true' : 'duckdb-badge-false';
