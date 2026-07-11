@@ -1,3 +1,19 @@
+## [0.9.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.8.0...v0.9.0) (2026-07-11)
+
+### Features
+
+* **emr:** enhance application state management with progress updates ([87538b4](https://github.com/denerops/aws-spark-notebooks/commit/87538b42fd7e5d857f42cee627bef6e18aa4678e))
+* **emr:** enhance session management with progress tracking ([a4b6798](https://github.com/denerops/aws-spark-notebooks/commit/a4b67981b9a8353e663444f1363a487f823d0a45))
+* **glue:** add delete session functionality and enhance session management ([88888db](https://github.com/denerops/aws-spark-notebooks/commit/88888db9cf21d484efee5926ea874940afbb21a5))
+* **notebook:** enhance metadata handling and connection progress ([f2623c2](https://github.com/denerops/aws-spark-notebooks/commit/f2623c2e4ebf134be7c26e3b5313eb47b7316e04))
+
+### Bug Fixes
+
+* **ci:** let semantic-release push past main ruleset ([1cb1982](https://github.com/denerops/aws-spark-notebooks/commit/1cb198270e7dba4e68446f8baf048dbea0b53c49))
+* **ci:** require GitHub Actions job names in ruleset ([15263c1](https://github.com/denerops/aws-spark-notebooks/commit/15263c1a2b34ab3517c5f70a76241d07a87f6b03))
+* **ci:** use pull_request suffix in required status checks ([017cfff](https://github.com/denerops/aws-spark-notebooks/commit/017cffff1baac6eade24b8e233f9d6de4e72af39))
+* update EMR Serverless icons and improve package management ([b6a74f2](https://github.com/denerops/aws-spark-notebooks/commit/b6a74f24d0a5e28bbedefc702c00253d6ca3fe4a))
+
 ## [0.8.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.7.4...v0.8.0) (2026-07-02)
 
 ### Features
