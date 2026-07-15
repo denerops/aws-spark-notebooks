@@ -62,10 +62,11 @@ export class EmrKernelManager implements vscode.Disposable {
     notebook: vscode.NotebookDocument,
     backend?: 'emr' | 'glue'
   ): Promise<boolean> {
-    if (
-      !backend &&
-      (this.isNotebookConnected(notebook) || this.connectionHub.resolveBackend(notebook))
-    ) {
+    if (!backend && this.isNotebookConnected(notebook)) {
+      return true;
+    }
+
+    if (!backend && this.connectionHub.resolveBackend(notebook)) {
       try {
         await vscode.window.withProgress(
           {
