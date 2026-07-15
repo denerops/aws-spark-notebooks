@@ -239,12 +239,27 @@ function normalizeGlueOutputData(data: unknown): Record<string, string> | undefi
   const record = data as Record<string, unknown>;
   const result: Record<string, string> = {};
 
-  if (typeof record.TextPlain === 'string') {
-    result['text/plain'] = record.TextPlain;
+  const textPlain =
+    typeof record.TextPlain === 'string'
+      ? record.TextPlain
+      : typeof record.textPlain === 'string'
+        ? record.textPlain
+        : typeof record['text/plain'] === 'string'
+          ? record['text/plain']
+          : undefined;
+
+  if (textPlain !== undefined) {
+    result['text/plain'] = textPlain;
   }
 
   for (const [key, value] of Object.entries(record)) {
-    if (key === 'TextPlain' || value === undefined || value === null) {
+    if (
+      key === 'TextPlain' ||
+      key === 'textPlain' ||
+      key === 'text/plain' ||
+      value === undefined ||
+      value === null
+    ) {
       continue;
     }
     if (typeof value === 'string') {

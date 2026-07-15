@@ -59,34 +59,67 @@ export function mapGlueStatementState(state: GlueStatementState): string {
   return state.toLowerCase();
 }
 
-/** Glue uses Statement.State for progress and Output.Status of `ok`/`error` when finished. */
-export function isGlueStatementTerminal(raw: Statement): boolean {
-  const statementState = raw.State ? mapGlueStatementState(raw.State) : undefined;
-  const outputStatus = raw.Output?.Status ? mapGlueStatementState(raw.Output.Status) : undefined;
+const TERMINAL_OUTPUT_STATUSES = new Set(['available', 'ok', 'error', 'cancelled']);
 
-  if (statementState && TERMINAL_STATEMENT_STATES.has(statementState)) {
+function glueOutputStatus(raw: Statement): string | undefined {
+  return raw.Output?.Status ? mapGlueStatementState(raw.Output.Status) : undefined;
+}
+
+function glueStatementState(raw: Statement): string | undefined {
+  return raw.State ? mapGlueStatementState(raw.State) : undefined;
+}
+
+export function hasGlueStatementError(raw: Statement): boolean {
+  const output = raw.Output;
+  return Boolean(
+    glueOutputStatus(raw) === 'error' ||
+      glueStatementState(raw) === 'error' ||
+      output?.ErrorName ||
+      output?.ErrorValue ||
+      (output?.Traceback?.length ?? 0) > 0
+  );
+}
+
+/**
+ * Glue exposes progress on Statement.State and result readiness on Output.Status.
+ * Statement.State can flip to AVAILABLE before Output.Data.TextPlain is populated.
+ */
+export function isGlueStatementTerminal(raw: Statement): boolean {
+  const statementState = glueStatementState(raw);
+  const outputStatus = glueOutputStatus(raw);
+
+  if (outputStatus === 'error' || outputStatus === 'cancelled') {
     return true;
   }
-  if (outputStatus === 'ok' || outputStatus === 'error') {
+  if (statementState === 'error' || statementState === 'cancelled') {
     return true;
   }
-  return Boolean(outputStatus && TERMINAL_STATEMENT_STATES.has(outputStatus));
+  if (outputStatus && TERMINAL_OUTPUT_STATUSES.has(outputStatus)) {
+    return true;
+  }
+  if (hasGlueStatementError(raw)) {
+    return true;
+  }
+  return false;
 }
 
 export function resolveGlueStatementStatus(raw: Statement): string {
-  const statementState = raw.State ? mapGlueStatementState(raw.State) : undefined;
-  const outputStatus = raw.Output?.Status ? mapGlueStatementState(raw.Output.Status) : undefined;
+  const statementState = glueStatementState(raw);
+  const outputStatus = glueOutputStatus(raw);
 
+  if (hasGlueStatementError(raw)) {
+    return 'error';
+  }
+  if (outputStatus === 'cancelled' || statementState === 'cancelled') {
+    return 'cancelled';
+  }
+  if (outputStatus === 'available' || outputStatus === 'ok') {
+    return 'available';
+  }
   if (statementState && TERMINAL_STATEMENT_STATES.has(statementState)) {
     return statementState;
   }
-  if (outputStatus === 'ok') {
-    return 'available';
-  }
-  if (outputStatus === 'error') {
-    return 'error';
-  }
-  if (outputStatus && TERMINAL_STATEMENT_STATES.has(outputStatus)) {
+  if (outputStatus && TERMINAL_OUTPUT_STATUSES.has(outputStatus)) {
     return outputStatus;
   }
   return statementState ?? outputStatus ?? 'unknown';
