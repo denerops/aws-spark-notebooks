@@ -30,6 +30,14 @@ export function parseTableFromStatementOutput(
   const rawText = extractLivyPlainText(data);
   let plainText = rawText;
 
+  if (stmt.output?.traceback?.length || stmt.output?.ename || stmt.output?.evalue) {
+    const trace =
+      stmt.output.traceback?.join('\n') ??
+      [stmt.output.ename, stmt.output.evalue].filter(Boolean).join(': ') ??
+      'Statement failed';
+    throw new Error(trace);
+  }
+
   const markerIndex = rawText.indexOf(TABLE_JSON_MARKER);
   if (markerIndex >= 0) {
     const before = rawText.slice(0, markerIndex).trim();
@@ -62,8 +70,9 @@ export function parseTableFromStatementOutput(
         },
         plainText,
       };
-    } catch {
-      // fall through to plain text
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'invalid JSON';
+      throw new Error(`Failed to parse table output (${detail}). Output may have been truncated.`);
     }
   }
 
