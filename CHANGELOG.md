@@ -1,3 +1,10 @@
+## [0.9.1](https://github.com/denerops/aws-spark-notebooks/compare/v0.9.0...v0.9.1) (2026-07-15)
+
+### Bug Fixes
+
+* **glue:** enhance output data normalization and error handling ([1c1beb8](https://github.com/denerops/aws-spark-notebooks/commit/1c1beb8be4bd5563b04ce87921da6bc9f2b44ef0))
+* **kernelManager:** streamline backend resolution logic ([55c9acd](https://github.com/denerops/aws-spark-notebooks/commit/55c9acd974966ab6d6661951e413c8a1220b2c47))
+
 ## [0.9.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.8.0...v0.9.0) (2026-07-11)
 
 ### Features
