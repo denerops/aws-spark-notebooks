@@ -1,3 +1,7 @@
+import { styleForInferredKind, type ColumnTypeStyle } from './columnTypeStyle';
+
+export type CellKind = 'null' | 'boolean' | 'number' | 'string' | 'json';
+
 export interface QueryResultPayload {
   columns: string[];
   columnTypes?: string[];
@@ -13,6 +17,57 @@ export interface QueryResultPayload {
   displayLimit?: number;
   /** Python expression evaluating to the DataFrame, used for optional exact count. */
   countCode?: string;
+}
+
+/** Presentation model for one column in a Query Result View. */
+export interface QueryResultColumnView {
+  name: string;
+  kind: CellKind;
+  typeBadge: ColumnTypeStyle;
+}
+
+/** Presentation model derived from a Query Result for display adapters. */
+export interface QueryResultView {
+  columns: QueryResultColumnView[];
+  /** False when there are no columns (timing-only completion). */
+  hasTable: boolean;
+  executionTimeMs: number;
+  /** Exact / truncated / optional filtered footer row label. */
+  footerRowLabel: string;
+}
+
+export function buildQueryResultView(
+  payload: QueryResultPayload,
+  options?: { filteredVisible?: number }
+): QueryResultView {
+  const columns = payload.columns.map((name, colIndex) => {
+    const kind = classifyColumn(payload.rows, colIndex);
+    return {
+      name,
+      kind,
+      typeBadge: styleForInferredKind(kind),
+    };
+  });
+
+  return {
+    columns,
+    hasTable: columns.length > 0,
+    executionTimeMs: payload.executionTimeMs,
+    footerRowLabel: formatFooterRowLabel(payload, options?.filteredVisible),
+  };
+}
+
+export function formatFooterRowLabel(
+  payload: QueryResultPayload,
+  filteredVisible?: number
+): string {
+  if (filteredVisible !== undefined) {
+    return `${filteredVisible.toLocaleString()} of ${payload.rows.length.toLocaleString()} rows shown`;
+  }
+  if (payload.truncated) {
+    return `Showing ${payload.rowCount.toLocaleString()}+ rows`;
+  }
+  return `${payload.rowCount.toLocaleString()} row(s)`;
 }
 
 export function stringifyCell(value: unknown): string {
@@ -36,8 +91,6 @@ export function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
-
-export type CellKind = 'null' | 'boolean' | 'number' | 'string' | 'json';
 
 export function classifyCell(value: unknown): CellKind {
   if (value === null || value === undefined) return 'null';

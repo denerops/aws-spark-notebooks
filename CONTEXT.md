@@ -43,3 +43,11 @@ _Avoid_: scope, origin
 **Kernel Selection**:
 The UI flow that chooses a Spark Backend (unless already forced) and either attaches an existing session or creates one for the notebook through Notebook Connection.
 _Avoid_: connect wizard (when meaning this unified flow), kernel picker
+
+**Query Result**:
+The tabular outcome of a successful statement: columns, rows, and row-count metadata (including truncation).
+_Avoid_: table payload (when speaking in domain terms), dataframe dump
+
+**Query Result View**:
+The presentation model derived from a Query Result for display: column kinds and type badges, cell rendering, and footer row labels (including filtered counts when the UI filters).
+_Avoid_: table model (ambiguous with the wire payload), HTML table

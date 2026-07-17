@@ -2,11 +2,11 @@ import type { ActivationFunction } from 'vscode-notebook-renderer';
 import styles from '../../media/tableRenderer.css';
 import type { QueryResultPayload } from '../output/tableModel';
 import {
-  classifyColumn,
+  buildQueryResultView,
+  escapeHtml,
   renderCellHtml,
   stringifyCell,
 } from '../output/tableModel';
-import { styleForInferredKind } from '../output/columnTypeStyle';
 
 const ERROR_MIME = 'application/vnd.emr-spark.error+json';
 
@@ -49,20 +49,8 @@ function ensureRendererStyles(element: HTMLElement): void {
   element.prepend(style);
 }
 
-function formatRowSummary(payload: QueryResultPayload, filteredVisible?: number): string {
-  if (filteredVisible !== undefined) {
-    return `${filteredVisible.toLocaleString()} of ${payload.rows.length.toLocaleString()} rows shown`;
-  }
-
-  if (payload.truncated) {
-    return `Showing ${payload.rowCount.toLocaleString()}+ rows`;
-  }
-
-  return `${payload.rowCount.toLocaleString()} row(s)`;
-}
-
 function applyPayloadToView(state: OutputViewState): void {
-  state.footerLeft.textContent = formatRowSummary(state.payload);
+  state.footerLeft.textContent = buildQueryResultView(state.payload).footerRowLabel;
 }
 
 const COPY_ICON_SVG =
@@ -178,10 +166,12 @@ export const activate: ActivationFunction = () => {
       root.className = 'duckdb-root duckdb-table-output';
       element.append(root);
 
-      if (!payload.columns?.length) {
+      const view = buildQueryResultView(payload);
+
+      if (!view.hasTable) {
         const ok = document.createElement('div');
         ok.className = 'duckdb-ok';
-        ok.textContent = `Completed in ${payload.executionTimeMs} ms`;
+        ok.textContent = `Completed in ${view.executionTimeMs} ms`;
         root.append(ok);
         return;
       }
@@ -190,8 +180,6 @@ export const activate: ActivationFunction = () => {
       let sortCol: number | null = null;
       let sortDir: SortDir = null;
       let filter = '';
-      const colKinds = payload.columns.map((_, i) => classifyColumn(rows, i));
-      const colStyles = payload.columns.map((_, i) => styleForInferredKind(colKinds[i]));
 
       const card = document.createElement('div');
       card.className = 'duckdb-result-card';
@@ -208,11 +196,12 @@ export const activate: ActivationFunction = () => {
       headerRow.append(indexTh);
 
       const headerCells: HTMLTableCellElement[] = [];
-      for (let i = 0; i < payload.columns.length; i++) {
+      for (let i = 0; i < view.columns.length; i++) {
+        const col = view.columns[i];
         const th = document.createElement('th');
         th.className = 'duckdb-sortable';
         th.dataset.col = String(i);
-        th.innerHTML = `<span class="duckdb-th-inner"><span class="duckdb-col-name">${payload.columns[i]}</span><span class="${colStyles[i].className}">${colStyles[i].label}</span></span><span class="duckdb-sort-icon">↕</span>`;
+        th.innerHTML = `<span class="duckdb-th-inner"><span class="duckdb-col-name">${escapeHtml(col.name)}</span><span class="${col.typeBadge.className}">${escapeHtml(col.typeBadge.label)}</span></span><span class="duckdb-sort-icon">↕</span>`;
         headerCells.push(th);
         headerRow.append(th);
       }
@@ -285,9 +274,9 @@ export const activate: ActivationFunction = () => {
       applyPayloadToView(viewState);
 
       function updateFooter(visibleCount: number): void {
-        footerLeft.textContent = filter
-          ? formatRowSummary(viewState.payload, visibleCount)
-          : formatRowSummary(viewState.payload);
+        footerLeft.textContent = buildQueryResultView(viewState.payload, {
+          filteredVisible: filter ? visibleCount : undefined,
+        }).footerRowLabel;
         footerRight.textContent = `${viewState.payload.executionTimeMs} ms`;
       }
 
@@ -319,9 +308,9 @@ export const activate: ActivationFunction = () => {
           numTd.textContent = String(rowIndex + 1);
           tr.append(numTd);
 
-          for (let colIndex = 0; colIndex < payload.columns.length; colIndex++) {
+          for (let colIndex = 0; colIndex < view.columns.length; colIndex++) {
             const td = document.createElement('td');
-            td.innerHTML = renderCellHtml(row[colIndex], colKinds[colIndex]);
+            td.innerHTML = renderCellHtml(row[colIndex], view.columns[colIndex].kind);
             tr.append(td);
           }
           tbody.append(tr);
@@ -330,7 +319,7 @@ export const activate: ActivationFunction = () => {
         if (visible === 0) {
           const tr = document.createElement('tr');
           const td = document.createElement('td');
-          td.colSpan = payload.columns.length + 1;
+          td.colSpan = view.columns.length + 1;
           td.className = 'duckdb-empty';
           td.textContent = filter ? 'No rows match your search.' : 'No rows returned.';
           tr.append(td);
