@@ -53,6 +53,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   kernelManager = registerKernelManager(
     context,
     connection,
+    emrBackend,
+    glueBackend,
     emrPresetStore,
     gluePresetStore
   );
@@ -211,6 +213,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const notebook = vscode.window.activeNotebookEditor?.notebook;
       const connected = await promptSparkConnection(
         connection,
+        emrBackend,
+        glueBackend,
         emrPresetStore,
         gluePresetStore,
         notebook && isEmrSparkNotebook(notebook) ? notebook : undefined,

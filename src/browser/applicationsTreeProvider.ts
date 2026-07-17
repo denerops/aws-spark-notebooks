@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
-import { getEmrServerlessService, type LivyApplication } from '../aws/emrServerlessClient';
+import type { LivyApplication } from '../aws/emrServerlessClient';
 import { formatAwsAuthError } from '../aws/credentials';
 import type { EmrSparkBackend } from '../emr/connectionManager';
 import { formatLivySessionLabel, type LivySessionInfo } from '../livy/types';
-import { LivySigV4Client } from '../livy/sigV4Client';
 
 export const APPLICATIONS_VIEW_ID = 'emrServerlessApplications';
 
@@ -157,17 +156,16 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
     this.loading = true;
     this.loadError = undefined;
     try {
-      const service = getEmrServerlessService();
-      this.region = await service.getRegion();
-      this.applications = await service.listLivyApplications();
+      const { region, applications } = await this.emrBackend.listApplications();
+      this.region = region;
+      this.applications = applications;
       this.sessionsByApp.clear();
       // Keep pendingSessionCreate — an in-flight create should still show in the tree.
 
       for (const app of this.applications) {
         if (app.state === 'STARTED') {
           try {
-            const client = new LivySigV4Client(app.id, this.region);
-            const sessions = await client.listSessions();
+            const sessions = await this.emrBackend.listSessions(app.id);
             this.sessionsByApp.set(app.id, sessions);
           } catch {
             this.sessionsByApp.set(app.id, []);

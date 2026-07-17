@@ -9,6 +9,7 @@ import type {
   GlueSparkBackendAdapter,
   SparkSessionHandle,
 } from '../platform/sparkBackend';
+import type { GlueSessionSummary } from './types';
 import type { LivyStatement, StatementKind } from '../livy/types';
 
 /**
@@ -21,6 +22,13 @@ export class GlueSparkBackend implements GlueSparkBackendAdapter {
 
   isCreatingSession(): boolean {
     return this.creatingSession;
+  }
+
+  async listSessions(): Promise<{ region: string; sessions: GlueSessionSummary[] }> {
+    const service = getGlueSessionService();
+    const region = await service.getRegion();
+    const sessions = await service.listLivySessions();
+    return { region, sessions };
   }
 
   async attach(sessionId: string): Promise<SparkSessionHandle> {

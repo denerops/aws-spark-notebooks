@@ -1,3 +1,6 @@
+import type { LivyApplication } from '../../aws/emrServerlessClient';
+import type { GlueSessionSummary } from '../../glue/types';
+import type { LivySessionInfo } from '../../livy/types';
 import type {
   EmrCreateParams,
   EmrSparkBackendAdapter,
@@ -75,9 +78,20 @@ export class FakeEmrAdapter implements EmrSparkBackendAdapter {
   attachCalls: Array<{ applicationId: string; sessionId: number }> = [];
   createCalls: EmrCreateParams[] = [];
   dashboardUrls = new Map<string, string>();
+  region = 'us-east-1';
+  applications: LivyApplication[] = [];
+  sessionsByApp = new Map<string, LivySessionInfo[]>();
 
   isCreatingSession(applicationId: string): boolean {
     return this.creating.has(applicationId);
+  }
+
+  async listApplications(): Promise<{ region: string; applications: LivyApplication[] }> {
+    return { region: this.region, applications: this.applications };
+  }
+
+  async listSessions(applicationId: string): Promise<LivySessionInfo[]> {
+    return this.sessionsByApp.get(applicationId) ?? [];
   }
 
   async attach(applicationId: string, sessionId: number): Promise<SparkSessionHandle> {
@@ -132,9 +146,15 @@ export class FakeGlueAdapter implements GlueSparkBackendAdapter {
   attachCalls: string[] = [];
   createCalls: GlueCreateParams[] = [];
   dashboardUrls = new Map<string, string>();
+  region = 'us-east-1';
+  sessions: GlueSessionSummary[] = [];
 
   isCreatingSession(): boolean {
     return this.creating;
+  }
+
+  async listSessions(): Promise<{ region: string; sessions: GlueSessionSummary[] }> {
+    return { region: this.region, sessions: this.sessions };
   }
 
   async attach(sessionId: string): Promise<SparkSessionHandle> {

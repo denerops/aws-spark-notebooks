@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { getGlueSessionService } from '../glue/glueSessionService';
 import { formatAwsAuthError } from '../aws/credentials';
 import type { GlueSparkBackend } from '../glue/connectionManager';
 import { formatGlueSessionLabel, type GlueSessionSummary } from '../glue/types';
@@ -96,9 +95,9 @@ export class GlueSessionsTreeProvider implements vscode.TreeDataProvider<GlueSes
     this.loading = true;
     this.loadError = undefined;
     try {
-      const service = getGlueSessionService();
-      this.region = await service.getRegion();
-      this.sessions = await service.listLivySessions();
+      const { region, sessions } = await this.glueBackend.listSessions();
+      this.region = region;
+      this.sessions = sessions;
     } catch (error) {
       this.loadError = formatAwsAuthError(error);
       this.sessions = [];

@@ -1,3 +1,5 @@
+import type { LivyApplication } from '../aws/emrServerlessClient';
+import type { GlueSessionSummary } from '../glue/types';
 import type { LivySessionInfo, LivyStatement, StatementKind } from '../livy/types';
 import type { SessionPreset } from '../session/presets';
 import type { GlueSessionPreset } from '../glue/presets';
@@ -75,6 +77,8 @@ export type SparkUiTarget =
 
 /** Spark Backend adapter: AWS session work only — never writes notebook metadata. */
 export interface EmrSparkBackendAdapter {
+  listApplications(): Promise<{ region: string; applications: LivyApplication[] }>;
+  listSessions(applicationId: string): Promise<LivySessionInfo[]>;
   attach(applicationId: string, sessionId: number): Promise<SparkSessionHandle>;
   create(params: EmrCreateParams): Promise<SparkSessionHandle>;
   createStandalone(params: EmrCreateParams): Promise<SparkSessionHandle>;
@@ -89,6 +93,7 @@ export interface EmrSparkBackendAdapter {
 
 /** Spark Backend adapter: AWS session work only — never writes notebook metadata. */
 export interface GlueSparkBackendAdapter {
+  listSessions(): Promise<{ region: string; sessions: GlueSessionSummary[] }>;
   attach(sessionId: string): Promise<SparkSessionHandle>;
   create(params: GlueCreateParams): Promise<SparkSessionHandle>;
   createStandalone(params: GlueCreateParams): Promise<SparkSessionHandle>;

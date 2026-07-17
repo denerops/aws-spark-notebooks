@@ -1,9 +1,14 @@
 import * as vscode from 'vscode';
-import type { SessionPresetStore } from '../session/presets';
 import type { GlueSessionPresetStore } from '../glue/presets';
 import type { NotebookConnection } from '../platform/notebookConnection';
-import { selectEmrKernel } from '../ui/kernelSelection';
-import { pickSparkBackend, selectGlueKernel } from '../ui/glueKernelSelection';
+import type {
+  EmrSparkBackendAdapter,
+  GlueSparkBackendAdapter,
+  SparkBackend,
+} from '../platform/sparkBackend';
+import type { SessionPresetStore } from '../session/presets';
+import { createKernelSelectionSteps } from '../ui/createKernelSelectionSteps';
+import { selectKernel } from '../ui/selectKernel';
 import { SparknbController } from './controller';
 import { CONTROLLER_ID, NOTEBOOK_TYPE, isEmrSparkNotebook } from './types';
 
@@ -13,6 +18,8 @@ export class EmrKernelManager implements vscode.Disposable {
 
   constructor(
     private readonly connection: NotebookConnection,
+    private readonly emr: EmrSparkBackendAdapter,
+    private readonly glue: GlueSparkBackendAdapter,
     private readonly emrPresetStore: SessionPresetStore,
     private readonly gluePresetStore: GlueSessionPresetStore,
     private readonly context: vscode.ExtensionContext
@@ -54,7 +61,7 @@ export class EmrKernelManager implements vscode.Disposable {
   /** Prefer a live binding; otherwise try metadata reattach, then the session picker. */
   private async ensureSessionOrPrompt(
     notebook: vscode.NotebookDocument,
-    backend?: 'emr' | 'glue'
+    backend?: SparkBackend
   ): Promise<boolean> {
     if (!backend && this.connection.isConnected(notebook)) {
       return true;
@@ -81,17 +88,15 @@ export class EmrKernelManager implements vscode.Disposable {
 
   async promptKernelSelection(
     notebook: vscode.NotebookDocument,
-    backend?: 'emr' | 'glue'
+    backend?: SparkBackend
   ): Promise<boolean> {
-    const selectedBackend = backend ?? (await pickSparkBackend());
-    if (!selectedBackend) {
-      return false;
-    }
-
-    const connected =
-      selectedBackend === 'glue'
-        ? await selectGlueKernel(this.connection, this.gluePresetStore, notebook)
-        : await selectEmrKernel(this.connection, this.emrPresetStore, notebook);
+    const steps = createKernelSelectionSteps(
+      this.emr,
+      this.glue,
+      this.emrPresetStore,
+      this.gluePresetStore
+    );
+    const connected = await selectKernel(this.connection, steps, notebook, { backend });
 
     if (connected) {
       this.updateKernelAppearance(notebook);
@@ -144,11 +149,15 @@ export class EmrKernelManager implements vscode.Disposable {
 export function registerKernelManager(
   context: vscode.ExtensionContext,
   connection: NotebookConnection,
+  emr: EmrSparkBackendAdapter,
+  glue: GlueSparkBackendAdapter,
   emrPresetStore: SessionPresetStore,
   gluePresetStore: GlueSessionPresetStore
 ): EmrKernelManager {
   const manager = new EmrKernelManager(
     connection,
+    emr,
+    glue,
     emrPresetStore,
     gluePresetStore,
     context

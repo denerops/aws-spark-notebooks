@@ -1,13 +1,19 @@
 import * as vscode from 'vscode';
-import type { NotebookConnection } from '../platform/notebookConnection';
-import type { SessionPresetStore } from '../session/presets';
 import type { GlueSessionPresetStore } from '../glue/presets';
-import { selectEmrKernel } from './kernelSelection';
-import { pickSparkBackend, selectGlueKernel } from './glueKernelSelection';
 import { isEmrSparkNotebook } from '../notebook/types';
+import type { NotebookConnection } from '../platform/notebookConnection';
+import type {
+  EmrSparkBackendAdapter,
+  GlueSparkBackendAdapter,
+} from '../platform/sparkBackend';
+import type { SessionPresetStore } from '../session/presets';
+import { createKernelSelectionSteps } from './createKernelSelectionSteps';
+import { selectKernel } from './selectKernel';
 
 export async function promptSparkConnection(
   connection: NotebookConnection,
+  emr: EmrSparkBackendAdapter,
+  glue: GlueSparkBackendAdapter,
   emrPresetStore: SessionPresetStore,
   gluePresetStore: GlueSessionPresetStore,
   notebook?: vscode.NotebookDocument,
@@ -25,15 +31,8 @@ export async function promptSparkConnection(
     return false;
   }
 
-  const backend = await pickSparkBackend();
-  if (!backend) {
-    return false;
-  }
-
-  const connected =
-    backend === 'glue'
-      ? await selectGlueKernel(connection, gluePresetStore, targetNotebook)
-      : await selectEmrKernel(connection, emrPresetStore, targetNotebook);
+  const steps = createKernelSelectionSteps(emr, glue, emrPresetStore, gluePresetStore);
+  const connected = await selectKernel(connection, steps, targetNotebook);
 
   if (connected) {
     onConnected?.(targetNotebook);

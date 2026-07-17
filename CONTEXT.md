@@ -39,3 +39,7 @@ _Avoid_: template, profile, config set
 **Preset Source**:
 Where a Session Preset is stored: workspace file or user (global) storage. When the same id exists in both, workspace wins.
 _Avoid_: scope, origin
+
+**Kernel Selection**:
+The UI flow that chooses a Spark Backend (unless already forced) and either attaches an existing session or creates one for the notebook through Notebook Connection.
+_Avoid_: connect wizard (when meaning this unified flow), kernel picker

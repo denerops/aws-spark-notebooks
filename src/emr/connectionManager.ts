@@ -1,14 +1,15 @@
-import { getEmrServerlessService } from '../aws/emrServerlessClient';
+import { getEmrServerlessService, type LivyApplication } from '../aws/emrServerlessClient';
 import { buildCreateSessionBody } from '../session/buildSessionBody';
 import { getDefaultRegion } from '../aws/credentials';
 import { installPresetPythonPackages } from '../livy/installPythonPackages';
 import { LivySession } from '../livy/session';
+import { LivySigV4Client } from '../livy/sigV4Client';
 import type {
   EmrCreateParams,
   EmrSparkBackendAdapter,
   SparkSessionHandle,
 } from '../platform/sparkBackend';
-import type { LivyStatement, StatementKind } from '../livy/types';
+import type { LivySessionInfo, LivyStatement, StatementKind } from '../livy/types';
 
 /**
  * EMR Serverless Spark Backend adapter: list/standalone-create/stop and AWS
@@ -20,6 +21,19 @@ export class EmrSparkBackend implements EmrSparkBackendAdapter {
 
   isCreatingSession(applicationId: string): boolean {
     return this.creatingSessionByApp.has(applicationId);
+  }
+
+  async listApplications(): Promise<{ region: string; applications: LivyApplication[] }> {
+    const service = getEmrServerlessService();
+    const region = await service.getRegion();
+    const applications = await service.listLivyApplications();
+    return { region, applications };
+  }
+
+  async listSessions(applicationId: string): Promise<LivySessionInfo[]> {
+    const region = await getDefaultRegion();
+    const client = new LivySigV4Client(applicationId, region);
+    return client.listSessions();
   }
 
   async attach(applicationId: string, sessionId: number): Promise<SparkSessionHandle> {
