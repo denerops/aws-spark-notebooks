@@ -1,3 +1,12 @@
+## [0.10.0](https://github.com/denerops/aws-spark-notebooks/compare/v0.9.1...v0.10.0) (2026-07-17)
+
+### Features
+
+* enhance Query Result handling with new view model and HTML rendering ([9867022](https://github.com/denerops/aws-spark-notebooks/commit/98670223bc53c43bb674b06f39cc3ee09140b83a))
+* implement unified kernel selection flow for EMR and Glue ([675fe86](https://github.com/denerops/aws-spark-notebooks/commit/675fe86fee19325723711a26409cabb213f81f46))
+* introduce Notebook Connection module and enhance session management ([7fb3c92](https://github.com/denerops/aws-spark-notebooks/commit/7fb3c92c92465df4ac74508276e1b2225273e647))
+* introduce Session Preset management and enhance Glue/EMR integration ([4691b04](https://github.com/denerops/aws-spark-notebooks/commit/4691b0409420aedfa650796685977c5f94fa14c1))
+
 ## [0.9.1](https://github.com/denerops/aws-spark-notebooks/compare/v0.9.0...v0.9.1) (2026-07-15)
 
 ### Bug Fixes
