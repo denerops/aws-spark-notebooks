@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { getEmrServerlessService } from '../aws/emrServerlessClient';
-import type { ConnectionManager } from '../emr/connectionManager';
 import { LivySigV4Client } from '../livy/sigV4Client';
 import { formatLivySessionLabel, type LivySessionInfo } from '../livy/types';
 import { isEmrSparkNotebook } from '../notebook/types';
 import type { SessionPresetStore } from '../session/presets';
+import type { NotebookConnection } from '../platform/notebookConnection';
 import { pickSessionPreset } from './pickSessionPreset';
 import { promptSessionName } from './promptSessionName';
 
@@ -21,16 +21,8 @@ type SessionPickItem = vscode.QuickPickItem & (
     }
 );
 
-export function isNotebookConnected(
-  connectionManager: ConnectionManager,
-  notebook: vscode.NotebookDocument
-): boolean {
-  const binding = connectionManager.getBinding(notebook);
-  return Boolean(binding?.session.isReady);
-}
-
 export async function selectEmrKernel(
-  connectionManager: ConnectionManager,
+  connection: NotebookConnection,
   presetStore: SessionPresetStore,
   notebook: vscode.NotebookDocument
 ): Promise<boolean> {
@@ -121,7 +113,7 @@ export async function selectEmrKernel(
     }
 
     if (sessionPick.itemKind === 'new') {
-      if (connectionManager.isCreatingSession(appPick.app.id)) {
+      if (connection.isCreatingSession({ backend: 'emr', applicationId: appPick.app.id })) {
         vscode.window.showInformationMessage(
           'Session creation already in progress for this application.'
         );
@@ -149,26 +141,26 @@ export async function selectEmrKernel(
             title: `Creating session "${sessionName}" (${preset.name})…`,
           },
           () =>
-            connectionManager.createSession(
-              notebook,
-              appPick.app.id,
+            connection.createForNotebook(notebook, {
+              backend: 'emr',
+              applicationId: appPick.app.id,
               preset,
               sessionName,
-              (info) => {
+              onProgress: (info) => {
                 void vscode.commands.executeCommand(
                   'emrServerless.patchSessionProgress',
                   appPick.app.id,
                   info
                 );
-              }
-            )
+              },
+            })
         );
       } catch (error) {
         void vscode.commands.executeCommand('emrServerless.refreshApplications');
         throw error;
       }
       void vscode.commands.executeCommand('emrServerless.refreshApplications');
-      const session = connectionManager.getSession(notebook);
+      const session = connection.getSession(notebook);
       vscode.window
         .showInformationMessage(
           `Connected to session "${sessionName}" (${session?.sessionId}) using preset "${preset.name}".`,
@@ -188,11 +180,11 @@ export async function selectEmrKernel(
         title: `Attaching to ${sessionPick.sessionLabel}…`,
       },
       () =>
-        connectionManager.attachToSession(
-          notebook,
-          appPick.app.id,
-          sessionPick.sessionId
-        )
+        connection.attach(notebook, {
+          backend: 'emr',
+          applicationId: appPick.app.id,
+          sessionId: sessionPick.sessionId,
+        })
     );
     vscode.window.showInformationMessage(`Attached to ${sessionPick.sessionLabel}.`);
     return true;

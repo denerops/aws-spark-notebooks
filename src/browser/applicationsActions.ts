@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { getEmrServerlessService } from '../aws/emrServerlessClient';
-import type { ConnectionManager } from '../emr/connectionManager';
-import type { NotebookConnectionHub } from '../platform/connectionHub';
+import type { EmrSparkBackend } from '../emr/connectionManager';
+import type { NotebookConnection } from '../platform/notebookConnection';
 import { createBlankSparknbDocument, createStarterSparknbDocument } from '../notebook/defaultDocument';
 import { LivySession } from '../livy/session';
 import { getSessionPresetStore } from '../session/presets';
@@ -70,10 +70,10 @@ async function resolveNotebookForAttach(
 
 export function registerApplicationsActions(
   context: vscode.ExtensionContext,
-  connectionManager: ConnectionManager,
+  emrBackend: EmrSparkBackend,
   tree: ApplicationsTreeProvider,
-  kernelManager?: EmrKernelManager,
-  connectionHub?: NotebookConnectionHub
+  kernelManager: EmrKernelManager,
+  connection: NotebookConnection
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.refreshApplications', () => {
@@ -182,9 +182,9 @@ export function registerApplicationsActions(
               )
           );
 
-          const notebooks = await connectionManager.detachNotebooksForApplication(appId);
+          const notebooks = await connection.detachForEmrApplication(appId);
           for (const notebook of notebooks) {
-            kernelManager?.updateKernelAppearance(notebook);
+            kernelManager.updateKernelAppearance(notebook as vscode.NotebookDocument);
           }
 
           vscode.window.showInformationMessage(`Application ${appId} stopped.`);
@@ -228,9 +228,9 @@ export function registerApplicationsActions(
               )
           );
 
-          const notebooks = await connectionManager.detachNotebooksForApplication(appId);
+          const notebooks = await connection.detachForEmrApplication(appId);
           for (const notebook of notebooks) {
-            kernelManager?.updateKernelAppearance(notebook);
+            kernelManager.updateKernelAppearance(notebook as vscode.NotebookDocument);
           }
 
           vscode.window.showInformationMessage(`Application ${appId} restarted.`);
@@ -261,9 +261,14 @@ export function registerApplicationsActions(
               location: vscode.ProgressLocation.Notification,
               title: `Attaching to session ${sessionId}…`,
             },
-            () => connectionManager.attachToSession(notebook, appId, sessionId)
+            () =>
+              connection.attach(notebook, {
+                backend: 'emr',
+                applicationId: appId,
+                sessionId,
+              })
           );
-          kernelManager?.updateKernelAppearance(notebook);
+          kernelManager.updateKernelAppearance(notebook);
           vscode.window.showInformationMessage(`Attached to session ${sessionId}.`);
           void vscode.commands.executeCommand('emrServerless.refreshApplications');
           void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
@@ -301,9 +306,9 @@ export function registerApplicationsActions(
             // Session may already be stopped.
           }
 
-          const notebooks = await connectionManager.detachNotebooksForSession(appId, sessionId);
+          const notebooks = await connection.detachForEmrSession(appId, sessionId);
           for (const notebook of notebooks) {
-            kernelManager?.updateKernelAppearance(notebook);
+            kernelManager.updateKernelAppearance(notebook as vscode.NotebookDocument);
           }
 
           vscode.window.showInformationMessage(`Session ${sessionId} stopped.`);
@@ -326,7 +331,7 @@ export function registerApplicationsActions(
           return;
         }
 
-        if (connectionManager.isCreatingSession(appId)) {
+        if (emrBackend.isCreatingSession(appId)) {
           vscode.window.showInformationMessage(
             'Session creation already in progress for this application.'
           );
@@ -338,10 +343,14 @@ export function registerApplicationsActions(
         const targetNotebook = findOpenSparknb();
 
         if (targetNotebook) {
-          const existing = await connectionManager.getLiveBinding(targetNotebook);
-          if (existing?.applicationId === appId) {
+          const existing = connection.getSession(targetNotebook);
+          if (
+            existing?.backend === 'emr' &&
+            existing.applicationId === appId &&
+            existing.isReady
+          ) {
             const reuse = await vscode.window.showInformationMessage(
-              `This notebook is already connected to session ${existing.session.sessionId}.`,
+              `This notebook is already connected to session ${existing.sessionId}.`,
               'Open Spark UI',
               'Create Another Session'
             );
@@ -350,7 +359,7 @@ export function registerApplicationsActions(
               return;
             }
             if (reuse === 'Create Another Session') {
-              await connectionManager.disconnectNotebook(targetNotebook);
+              await connection.disconnect(targetNotebook);
             } else {
               return;
             }
@@ -398,26 +407,25 @@ export function registerApplicationsActions(
             },
             async () => {
               if (targetNotebook) {
-                const binding = await connectionManager.createSession(
-                  targetNotebook,
-                  appId,
+                return connection.createForNotebook(targetNotebook, {
+                  backend: 'emr',
+                  applicationId: appId,
                   preset,
                   sessionName,
-                  onProgress
-                );
-                return binding.session;
+                  onProgress,
+                });
               }
-              return connectionManager.createStandaloneSession(
-                appId,
+              return emrBackend.createStandalone({
+                applicationId: appId,
                 preset,
                 sessionName,
-                onProgress
-              );
+                onProgress,
+              });
             }
           );
 
           if (targetNotebook) {
-            kernelManager?.updateKernelAppearance(targetNotebook);
+            kernelManager.updateKernelAppearance(targetNotebook);
             void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
           }
 
@@ -448,15 +456,12 @@ export function registerApplicationsActions(
   context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.refreshDashboard', async () => {
       const notebook = getActiveSparknb();
-      const url = connectionHub
-        ? await connectionHub.openSparkUi(notebook)
-        : await connectionManager.openSparkUi(notebook);
+      const url = await connection.openSparkUi(notebook);
       if (url) {
         vscode.window.showInformationMessage('Spark UI link refreshed.');
       } else {
-        const emrTarget = connectionManager.resolveSparkUiTarget(notebook);
-        const glueTarget = connectionHub?.getGlueManager().resolveSparkUiTarget(notebook);
-        const detail = emrTarget?.session?.dashboardError ?? glueTarget?.session?.dashboardError;
+        const target = connection.resolveSparkUiTarget(notebook);
+        const detail = target?.session?.dashboardError;
         vscode.window.showWarningMessage(
           detail
             ? `Could not fetch Spark UI URL: ${detail}`
@@ -487,13 +492,10 @@ export function registerApplicationsActions(
         }
 
         const notebook = getActiveSparknb();
-        const url = connectionHub
-          ? await connectionHub.openSparkUi(notebook)
-          : await connectionManager.openSparkUi(notebook);
+        const url = await connection.openSparkUi(notebook);
         if (!url) {
-          const emrTarget = connectionManager.resolveSparkUiTarget(notebook);
-          const glueTarget = connectionHub?.getGlueManager().resolveSparkUiTarget(notebook);
-          const detail = emrTarget?.session?.dashboardError ?? glueTarget?.session?.dashboardError;
+          const target = connection.resolveSparkUiTarget(notebook);
+          const detail = target?.session?.dashboardError;
           vscode.window.showWarningMessage(
             detail
               ? `Could not open Spark UI: ${detail}`

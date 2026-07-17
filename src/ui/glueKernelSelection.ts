@@ -5,7 +5,7 @@ import { isEmrSparkNotebook } from '../notebook/types';
 import type { GlueSessionPresetStore } from '../glue/presets';
 import { pickGlueSessionPreset } from './pickGlueSessionPreset';
 import { promptSessionName } from './promptSessionName';
-import type { GlueConnectionManager } from '../glue/connectionManager';
+import type { NotebookConnection } from '../platform/notebookConnection';
 
 const promptingNotebooks = new Set<string>();
 
@@ -20,20 +20,8 @@ type SessionPickItem = vscode.QuickPickItem & (
     }
 );
 
-export function isGlueNotebookConnected(
-  connectionManager: GlueConnectionManager,
-  notebook: vscode.NotebookDocument
-): boolean {
-  const binding = connectionManager.getBinding(notebook);
-  if (binding?.session.isReady) {
-    return true;
-  }
-  const meta = connectionManager.resolveNotebookMetadata(notebook);
-  return Boolean(meta.sessionId);
-}
-
 export async function selectGlueKernel(
-  connectionManager: GlueConnectionManager,
+  connection: NotebookConnection,
   presetStore: GlueSessionPresetStore,
   notebook: vscode.NotebookDocument
 ): Promise<boolean> {
@@ -93,7 +81,7 @@ export async function selectGlueKernel(
     }
 
     if (sessionPick.itemKind === 'new') {
-      if (connectionManager.isCreatingSession()) {
+      if (connection.isCreatingSession({ backend: 'glue' })) {
         vscode.window.showInformationMessage('Glue session creation already in progress.');
         return false;
       }
@@ -114,9 +102,14 @@ export async function selectGlueKernel(
           location: vscode.ProgressLocation.Notification,
           title: `Creating Glue session (${preset.name})…`,
         },
-        () => connectionManager.createSession(notebook, preset, sessionName ?? undefined)
+        () =>
+          connection.createForNotebook(notebook, {
+            backend: 'glue',
+            preset,
+            sessionName: sessionName ?? undefined,
+          })
       );
-      const session = connectionManager.getSession(notebook);
+      const session = connection.getSession(notebook);
       vscode.window
         .showInformationMessage(
           `Connected to Glue session ${session?.sessionId} using preset "${preset.name}".`,
@@ -135,7 +128,11 @@ export async function selectGlueKernel(
         location: vscode.ProgressLocation.Notification,
         title: `Attaching to ${sessionPick.sessionLabel}…`,
       },
-      () => connectionManager.attachToSession(notebook, sessionPick.sessionId)
+      () =>
+        connection.attach(notebook, {
+          backend: 'glue',
+          sessionId: sessionPick.sessionId,
+        })
     );
     vscode.window.showInformationMessage(`Attached to ${sessionPick.sessionLabel}.`);
     return true;

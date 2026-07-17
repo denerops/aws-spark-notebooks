@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { NotebookConnectionHub } from '../platform/connectionHub';
+import type { NotebookConnection } from '../platform/notebookConnection';
 import type { SessionPresetStore } from '../session/presets';
 import type { GlueSessionPresetStore } from '../glue/presets';
 import { selectEmrKernel } from './kernelSelection';
@@ -7,7 +7,7 @@ import { pickSparkBackend, selectGlueKernel } from './glueKernelSelection';
 import { isEmrSparkNotebook } from '../notebook/types';
 
 export async function promptSparkConnection(
-  connectionHub: NotebookConnectionHub,
+  connection: NotebookConnection,
   emrPresetStore: SessionPresetStore,
   gluePresetStore: GlueSessionPresetStore,
   notebook?: vscode.NotebookDocument,
@@ -32,16 +32,8 @@ export async function promptSparkConnection(
 
   const connected =
     backend === 'glue'
-      ? await selectGlueKernel(
-          connectionHub.getGlueManager(),
-          gluePresetStore,
-          targetNotebook
-        )
-      : await selectEmrKernel(
-          connectionHub.getEmrManager(),
-          emrPresetStore,
-          targetNotebook
-        );
+      ? await selectGlueKernel(connection, gluePresetStore, targetNotebook)
+      : await selectEmrKernel(connection, emrPresetStore, targetNotebook);
 
   if (connected) {
     onConnected?.(targetNotebook);

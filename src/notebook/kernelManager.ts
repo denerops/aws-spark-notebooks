@@ -1,25 +1,23 @@
 import * as vscode from 'vscode';
 import type { SessionPresetStore } from '../session/presets';
 import type { GlueSessionPresetStore } from '../glue/presets';
-import type { NotebookConnectionHub } from '../platform/connectionHub';
+import type { NotebookConnection } from '../platform/notebookConnection';
 import { selectEmrKernel } from '../ui/kernelSelection';
 import { pickSparkBackend, selectGlueKernel } from '../ui/glueKernelSelection';
 import { SparknbController } from './controller';
 import { CONTROLLER_ID, NOTEBOOK_TYPE, isEmrSparkNotebook } from './types';
-import { formatLivySessionLabel } from '../livy/types';
-import { formatGlueSessionLabel } from '../glue/types';
 
 export class EmrKernelManager implements vscode.Disposable {
   private readonly mainController: vscode.NotebookController;
   private readonly sparkController: SparknbController;
 
   constructor(
-    private readonly connectionHub: NotebookConnectionHub,
+    private readonly connection: NotebookConnection,
     private readonly emrPresetStore: SessionPresetStore,
     private readonly gluePresetStore: GlueSessionPresetStore,
     private readonly context: vscode.ExtensionContext
   ) {
-    this.sparkController = new SparknbController(connectionHub);
+    this.sparkController = new SparknbController(connection);
 
     this.mainController = vscode.notebooks.createNotebookController(
       CONTROLLER_ID,
@@ -53,27 +51,23 @@ export class EmrKernelManager implements vscode.Disposable {
     // Controllers disposed via context.subscriptions
   }
 
-  private isNotebookConnected(notebook: vscode.NotebookDocument): boolean {
-    return this.connectionHub.isConnected(notebook);
-  }
-
   /** Prefer a live binding; otherwise try metadata reattach, then the session picker. */
   private async ensureSessionOrPrompt(
     notebook: vscode.NotebookDocument,
     backend?: 'emr' | 'glue'
   ): Promise<boolean> {
-    if (!backend && this.isNotebookConnected(notebook)) {
+    if (!backend && this.connection.isConnected(notebook)) {
       return true;
     }
 
-    if (!backend && this.connectionHub.resolveBackend(notebook)) {
+    if (!backend && this.connection.hasSessionBinding(notebook)) {
       try {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
             title: 'Reconnecting to Spark session…',
           },
-          () => this.connectionHub.ensureConnected(notebook)
+          () => this.connection.ensureConnected(notebook)
         );
         this.updateKernelAppearance(notebook);
         return true;
@@ -96,16 +90,8 @@ export class EmrKernelManager implements vscode.Disposable {
 
     const connected =
       selectedBackend === 'glue'
-        ? await selectGlueKernel(
-            this.connectionHub.getGlueManager(),
-            this.gluePresetStore,
-            notebook
-          )
-        : await selectEmrKernel(
-            this.connectionHub.getEmrManager(),
-            this.emrPresetStore,
-            notebook
-          );
+        ? await selectGlueKernel(this.connection, this.gluePresetStore, notebook)
+        : await selectEmrKernel(this.connection, this.emrPresetStore, notebook);
 
     if (connected) {
       this.updateKernelAppearance(notebook);
@@ -123,78 +109,10 @@ export class EmrKernelManager implements vscode.Disposable {
       return;
     }
 
-    const glueBinding = this.connectionHub.getGlueManager().getBinding(notebook);
-    if (glueBinding?.session.isReady) {
-      const sessionLabel = formatGlueSessionLabel({
-        id: glueBinding.session.sessionId,
-        description: glueBinding.session.name,
-      });
-      this.mainController.label = 'Glue Interactive PySpark';
-      this.mainController.description = sessionLabel;
-      this.mainController.detail = glueBinding.session.state;
-      this.mainController.updateNotebookAffinity(
-        notebook,
-        vscode.NotebookControllerAffinity.Preferred
-      );
-      return;
-    }
-
-    const glueMeta = (notebook.metadata?.glueInteractive ?? {}) as { sessionId?: string };
-    if (glueMeta.sessionId) {
-      const sessionLabel = formatGlueSessionLabel({ id: glueMeta.sessionId });
-      this.mainController.label = 'Glue Interactive PySpark';
-      this.mainController.description = sessionLabel;
-      this.mainController.detail = 'attached';
-      this.mainController.updateNotebookAffinity(
-        notebook,
-        vscode.NotebookControllerAffinity.Preferred
-      );
-      return;
-    }
-
-    const emrBinding = this.connectionHub.getEmrManager().getBinding(notebook);
-    if (emrBinding?.session.isReady) {
-      const shortApp =
-        emrBinding.applicationId.length > 16
-          ? `${emrBinding.applicationId.slice(0, 12)}…`
-          : emrBinding.applicationId;
-      const sessionLabel = formatLivySessionLabel({
-        id: emrBinding.session.sessionId,
-        name: emrBinding.session.name,
-      });
-      this.mainController.label = 'EMR Serverless PySpark';
-      this.mainController.description = `${shortApp} · ${sessionLabel}`;
-      this.mainController.detail = emrBinding.session.state;
-      this.mainController.updateNotebookAffinity(
-        notebook,
-        vscode.NotebookControllerAffinity.Preferred
-      );
-      return;
-    }
-
-    const emrMeta = (notebook.metadata?.emrServerless ?? {}) as {
-      applicationId?: string;
-      sessionId?: number;
-    };
-    if (emrMeta.applicationId && emrMeta.sessionId !== undefined) {
-      const shortApp =
-        emrMeta.applicationId.length > 16
-          ? `${emrMeta.applicationId.slice(0, 12)}…`
-          : emrMeta.applicationId;
-      const sessionLabel = formatLivySessionLabel({ id: emrMeta.sessionId });
-      this.mainController.label = 'EMR Serverless PySpark';
-      this.mainController.description = `${shortApp} · ${sessionLabel}`;
-      this.mainController.detail = 'attached';
-      this.mainController.updateNotebookAffinity(
-        notebook,
-        vscode.NotebookControllerAffinity.Preferred
-      );
-      return;
-    }
-
-    this.mainController.label = 'AWS Spark PySpark';
-    this.mainController.description = 'No session selected';
-    this.mainController.detail = 'Select an EMR or Glue session to run cells';
+    const view = this.connection.getConnectionView(notebook);
+    this.mainController.label = view.label;
+    this.mainController.description = view.description;
+    this.mainController.detail = view.detail;
     // Preferred affinity auto-selects this controller so Run Cell skips VS Code's
     // kernel-source / kernel-list pickers and goes straight to our backend prompt.
     this.mainController.updateNotebookAffinity(
@@ -225,12 +143,12 @@ export class EmrKernelManager implements vscode.Disposable {
 
 export function registerKernelManager(
   context: vscode.ExtensionContext,
-  connectionHub: NotebookConnectionHub,
+  connection: NotebookConnection,
   emrPresetStore: SessionPresetStore,
   gluePresetStore: GlueSessionPresetStore
 ): EmrKernelManager {
   const manager = new EmrKernelManager(
-    connectionHub,
+    connection,
     emrPresetStore,
     gluePresetStore,
     context

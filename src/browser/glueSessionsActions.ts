@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { getGlueSessionService } from '../glue/glueSessionService';
-import type { GlueConnectionManager } from '../glue/connectionManager';
+import type { GlueSparkBackend } from '../glue/connectionManager';
+import type { NotebookConnection } from '../platform/notebookConnection';
 import { GlueLivySession } from '../glue/glueSession';
 import { getGlueSessionPresetStore } from '../glue/presets';
 import { pickGlueSessionPreset } from '../ui/pickGlueSessionPreset';
@@ -76,9 +77,10 @@ async function resolveNotebookForAttach(sessionId: string): Promise<vscode.Noteb
 
 export function registerGlueSessionsActions(
   context: vscode.ExtensionContext,
-  connectionManager: GlueConnectionManager,
+  glueBackend: GlueSparkBackend,
   tree: GlueSessionsTreeProvider,
-  kernelManager?: EmrKernelManager
+  kernelManager: EmrKernelManager,
+  connection: NotebookConnection
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('glueInteractive.refreshSessions', () => {
@@ -99,9 +101,13 @@ export function registerGlueSessionsActions(
             location: vscode.ProgressLocation.Notification,
             title: `Attaching to Glue session ${sessionId}…`,
           },
-          () => connectionManager.attachToSession(notebook, sessionId)
+          () =>
+            connection.attach(notebook, {
+              backend: 'glue',
+              sessionId,
+            })
         );
-        kernelManager?.updateKernelAppearance(notebook);
+        kernelManager.updateKernelAppearance(notebook);
         vscode.window.showInformationMessage(`Attached to Glue session ${sessionId}.`);
         void vscode.commands.executeCommand('glueInteractive.refreshSessions');
         void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
@@ -135,9 +141,9 @@ export function registerGlueSessionsActions(
           await getGlueSessionService().stopSession(sessionId).catch(() => undefined);
         }
 
-        const notebooks = await connectionManager.detachNotebooksForSession(sessionId);
+        const notebooks = await connection.detachForGlueSession(sessionId);
         for (const notebook of notebooks) {
-          kernelManager?.updateKernelAppearance(notebook);
+          kernelManager.updateKernelAppearance(notebook as vscode.NotebookDocument);
         }
 
         vscode.window.showInformationMessage(`Glue session ${sessionId} stopped.`);
@@ -167,9 +173,9 @@ export function registerGlueSessionsActions(
       try {
         await deleteGlueSession(sessionId);
 
-        const notebooks = await connectionManager.detachNotebooksForSession(sessionId);
+        const notebooks = await connection.detachForGlueSession(sessionId);
         for (const notebook of notebooks) {
-          kernelManager?.updateKernelAppearance(notebook);
+          kernelManager.updateKernelAppearance(notebook as vscode.NotebookDocument);
         }
 
         vscode.window.showInformationMessage(`Glue session ${sessionId} deleted.`);
@@ -184,7 +190,7 @@ export function registerGlueSessionsActions(
 
   context.subscriptions.push(
     vscode.commands.registerCommand('glueInteractive.newSession', async () => {
-      if (connectionManager.isCreatingSession()) {
+      if (glueBackend.isCreatingSession()) {
         vscode.window.showInformationMessage('Glue session creation already in progress.');
         return;
       }
@@ -217,19 +223,21 @@ export function registerGlueSessionsActions(
           },
           async () => {
             if (targetNotebook) {
-              const binding = await connectionManager.createSession(
-                targetNotebook,
+              return connection.createForNotebook(targetNotebook, {
+                backend: 'glue',
                 preset,
-                sessionName || undefined
-              );
-              return binding.session;
+                sessionName: sessionName || undefined,
+              });
             }
-            return connectionManager.createStandaloneSession(preset, sessionName || undefined);
+            return glueBackend.createStandalone({
+              preset,
+              sessionName: sessionName || undefined,
+            });
           }
         );
 
         if (targetNotebook) {
-          kernelManager?.updateKernelAppearance(targetNotebook);
+          kernelManager.updateKernelAppearance(targetNotebook);
           void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
         }
 
@@ -265,9 +273,9 @@ export function registerGlueSessionsActions(
       }
 
       const notebook = getActiveSparknb();
-      const url = await connectionManager.openSparkUi(notebook);
+      const url = await connection.openSparkUi(notebook);
       if (!url) {
-        const target = connectionManager.resolveSparkUiTarget(notebook);
+        const target = connection.resolveSparkUiTarget(notebook);
         const detail = target?.session?.dashboardError;
         vscode.window.showWarningMessage(
           detail
@@ -288,7 +296,7 @@ export function registerGlueSessionsActions(
         vscode.window.showWarningMessage('Open a notebook first.');
         return;
       }
-      await kernelManager?.promptKernelSelection(notebook, 'glue');
+      await kernelManager.promptKernelSelection(notebook, 'glue');
     })
   );
 }

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { getEmrServerlessService, type LivyApplication } from '../aws/emrServerlessClient';
 import { formatAwsAuthError } from '../aws/credentials';
-import type { ConnectionManager } from '../emr/connectionManager';
+import type { EmrSparkBackend } from '../emr/connectionManager';
 import { formatLivySessionLabel, type LivySessionInfo } from '../livy/types';
 import { LivySigV4Client } from '../livy/sigV4Client';
 
@@ -107,7 +107,7 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
   private loadError: string | undefined;
   private loading = false;
 
-  constructor(private readonly connectionManager: ConnectionManager) {}
+  constructor(private readonly emrBackend: EmrSparkBackend) {}
 
   refresh(): void {
     void this.loadApplications();
@@ -291,7 +291,7 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
             { description: 'starting' }
           )
         );
-      } else if (!this.connectionManager.isCreatingSession(appId)) {
+      } else if (!this.emrBackend.isCreatingSession(appId)) {
         items.push(
           new ApplicationsTreeItem(
             'empty',
@@ -322,9 +322,9 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
 
 export function registerApplicationsTree(
   context: vscode.ExtensionContext,
-  connectionManager: ConnectionManager
+  emrBackend: EmrSparkBackend
 ): ApplicationsTreeProvider {
-  const provider = new ApplicationsTreeProvider(connectionManager);
+  const provider = new ApplicationsTreeProvider(emrBackend);
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider(APPLICATIONS_VIEW_ID, provider)

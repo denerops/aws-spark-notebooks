@@ -9,9 +9,10 @@ import { registerSessionPresetsActions } from './browser/sessionPresetsActions';
 import { registerGlueSessionsTree } from './browser/glueSessionsTreeProvider';
 import { registerGlueSessionsActions } from './browser/glueSessionsActions';
 import { registerGluePresetsActions } from './browser/gluePresetsActions';
-import { ConnectionManager } from './emr/connectionManager';
-import { GlueConnectionManager } from './glue/connectionManager';
-import { NotebookConnectionHub } from './platform/connectionHub';
+import { EmrSparkBackend } from './emr/connectionManager';
+import { GlueSparkBackend } from './glue/connectionManager';
+import { NotebookConnection } from './platform/notebookConnection';
+import { vscodeNotebookWorkspace } from './platform/vscodeNotebookWorkspace';
 import { registerKernelManager, type EmrKernelManager } from './notebook/kernelManager';
 import { registerSerializer } from './notebook/serializer';
 import { openEmrSparkNotebook, revealEmrSparkNotebookIfOpen } from './notebook/openNotebook';
@@ -29,7 +30,7 @@ import { getSessionPresetStore } from './session/presets';
 import { getGlueSessionPresetStore } from './glue/presets';
 import { registerWelcomePage, showWelcomeOnFirstInstall } from './ui/welcomePage';
 
-let connectionHub: NotebookConnectionHub;
+let connection: NotebookConnection;
 let statusBar: ConnectionStatusBar;
 let configTree: ReturnType<typeof registerConfigTree>;
 let applicationsTree: ReturnType<typeof registerApplicationsTree>;
@@ -39,11 +40,11 @@ let kernelManager: EmrKernelManager;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   await initializeAwsContext();
 
-  const emrConnectionManager = new ConnectionManager();
-  const glueConnectionManager = new GlueConnectionManager();
-  connectionHub = new NotebookConnectionHub(emrConnectionManager, glueConnectionManager);
+  const emrBackend = new EmrSparkBackend();
+  const glueBackend = new GlueSparkBackend();
+  connection = new NotebookConnection(emrBackend, glueBackend, vscodeNotebookWorkspace);
 
-  statusBar = new ConnectionStatusBar(connectionHub);
+  statusBar = new ConnectionStatusBar(connection);
   const emrPresetStore = getSessionPresetStore(context);
   const gluePresetStore = getGlueSessionPresetStore(context);
   configTree = registerConfigTree(context, emrPresetStore, gluePresetStore);
@@ -51,14 +52,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   registerSerializer(context);
   kernelManager = registerKernelManager(
     context,
-    connectionHub,
+    connection,
     emrPresetStore,
     gluePresetStore
   );
-  applicationsTree = registerApplicationsTree(context, emrConnectionManager);
-  glueSessionsTree = registerGlueSessionsTree(context, glueConnectionManager);
-  registerApplicationsActions(context, emrConnectionManager, applicationsTree, kernelManager, connectionHub);
-  registerGlueSessionsActions(context, glueConnectionManager, glueSessionsTree, kernelManager);
+  applicationsTree = registerApplicationsTree(context, emrBackend);
+  glueSessionsTree = registerGlueSessionsTree(context, glueBackend);
+  registerApplicationsActions(context, emrBackend, applicationsTree, kernelManager, connection);
+  registerGlueSessionsActions(context, glueBackend, glueSessionsTree, kernelManager, connection);
   registerSessionPresetsActions(context, emrPresetStore, configTree);
   registerGluePresetsActions(context, gluePresetStore, configTree);
   registerWelcomePage(context);
@@ -70,12 +71,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
 
   const refreshAfterAwsContextChange = async (reason: 'profile' | 'region' | 'both'): Promise<void> => {
-    const hadBindings =
-      connectionHub.getEmrManager().listBindings().length > 0 ||
-      connectionHub.getGlueManager().listBindings().length > 0;
+    const hadBindings = connection.hasAnyBindings();
 
     if (hadBindings) {
-      await connectionHub.disconnectAll();
+      await connection.disconnectAll();
       const message =
         reason === 'both'
           ? 'Disconnected notebook sessions because the AWS profile or region changed.'
@@ -211,7 +210,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('emrServerless.connect', async () => {
       const notebook = vscode.window.activeNotebookEditor?.notebook;
       const connected = await promptSparkConnection(
-        connectionHub,
+        connection,
         emrPresetStore,
         gluePresetStore,
         notebook && isEmrSparkNotebook(notebook) ? notebook : undefined,
@@ -237,12 +236,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('emrServerless.disconnect', async () => {
       const notebook = vscode.window.activeNotebookEditor?.notebook;
       if (notebook && isEmrSparkNotebook(notebook)) {
-        const backend = connectionHub.resolveBackend(notebook);
-        if (backend === 'glue') {
-          await connectionHub.getGlueManager().disconnectNotebook(notebook);
-        } else {
-          await connectionHub.getEmrManager().disconnectNotebook(notebook);
-        }
+        await connection.disconnect(notebook);
         kernelManager.updateKernelAppearance(notebook);
       }
       refreshSidebar();
@@ -254,8 +248,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!isEmrSparkNotebook(notebook)) {
         return;
       }
-      connectionHub.getEmrManager().releaseNotebookBinding(notebook);
-      connectionHub.getGlueManager().releaseNotebookBinding(notebook);
+      connection.release(notebook);
       refreshSidebar();
       applicationsTree.refresh();
       glueSessionsTree.refresh();
@@ -287,9 +280,8 @@ function notifyDashboardAvailable(notebook?: vscode.NotebookDocument): void {
     return;
   }
 
-  const emrSession = connectionHub.getEmrManager().getSession(nb);
-  const glueSession = connectionHub.getGlueManager().getSession(nb);
-  const dashboardUrl = emrSession?.dashboardUrl ?? glueSession?.dashboardUrl;
+  const session = connection.getSession(nb);
+  const dashboardUrl = session?.dashboardUrl;
   if (!dashboardUrl) {
     return;
   }
@@ -310,5 +302,5 @@ function notifyDashboardAvailable(notebook?: vscode.NotebookDocument): void {
 }
 
 export async function deactivate(): Promise<void> {
-  await connectionHub?.disconnectAll().catch(() => undefined);
+  await connection?.disconnectAll().catch(() => undefined);
 }

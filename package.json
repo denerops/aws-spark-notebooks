@@ -623,6 +623,7 @@
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts",
     "package": "node scripts/package.mjs"
   },
   "devDependencies": {
@@ -638,6 +639,7 @@
     "conventional-changelog-conventionalcommits": "^9.1.0",
     "esbuild": "^0.25.5",
     "semantic-release": "^24.2.9",
+    "tsx": "^4.23.1",
     "typescript": "^5.8.3"
   },
   "dependencies": {

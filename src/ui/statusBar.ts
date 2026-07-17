@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import type { NotebookConnectionHub } from '../platform/connectionHub';
+import type { NotebookConnection } from '../platform/notebookConnection';
 import { isEmrSparkNotebook } from '../notebook/types';
 
 export class ConnectionStatusBar {
   private readonly sparkUiItem: vscode.StatusBarItem;
 
-  constructor(private readonly connectionHub: NotebookConnectionHub) {
+  constructor(private readonly connection: NotebookConnection) {
     this.sparkUiItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
     this.sparkUiItem.command = 'emrServerless.openSparkUi';
     this.sparkUiItem.text = '$(globe) Spark UI';
@@ -22,19 +22,9 @@ export class ConnectionStatusBar {
 
   update(notebook?: vscode.NotebookDocument): void {
     const activeNotebook = notebook ?? this.getActiveSparknb();
-    const emrSession = activeNotebook
-      ? this.connectionHub.getEmrManager().getSession(activeNotebook)
-      : undefined;
-    const glueSession = activeNotebook
-      ? this.connectionHub.getGlueManager().getSession(activeNotebook)
-      : undefined;
-    const session =
-      emrSession ??
-      glueSession ??
-      this.connectionHub.getEmrManager().getActiveSession() ??
-      this.connectionHub.getGlueManager().listBindings()[0]?.session;
+    const hasTarget = Boolean(this.connection.resolveSparkUiTarget(activeNotebook));
 
-    if (session) {
+    if (hasTarget) {
       this.sparkUiItem.show();
       return;
     }

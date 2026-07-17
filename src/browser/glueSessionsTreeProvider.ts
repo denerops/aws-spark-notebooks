@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { getGlueSessionService } from '../glue/glueSessionService';
 import { formatAwsAuthError } from '../aws/credentials';
-import type { GlueConnectionManager } from '../glue/connectionManager';
+import type { GlueSparkBackend } from '../glue/connectionManager';
 import { formatGlueSessionLabel, type GlueSessionSummary } from '../glue/types';
 
 export const GLUE_SESSIONS_VIEW_ID = 'glueInteractiveSessions';
@@ -85,7 +85,7 @@ export class GlueSessionsTreeProvider implements vscode.TreeDataProvider<GlueSes
   private loadError: string | undefined;
   private loading = false;
 
-  constructor(private readonly connectionManager: GlueConnectionManager) {}
+  constructor(private readonly glueBackend: GlueSparkBackend) {}
 
   refresh(): void {
     void this.loadSessions();
@@ -164,7 +164,7 @@ export class GlueSessionsTreeProvider implements vscode.TreeDataProvider<GlueSes
       )
     );
 
-    if (this.connectionManager.isCreatingSession()) {
+    if (this.glueBackend.isCreatingSession()) {
       items.push(
         new GlueSessionsTreeItem(
           'loading',
@@ -215,9 +215,9 @@ export class GlueSessionsTreeProvider implements vscode.TreeDataProvider<GlueSes
 
 export function registerGlueSessionsTree(
   context: vscode.ExtensionContext,
-  connectionManager: GlueConnectionManager
+  glueBackend: GlueSparkBackend
 ): GlueSessionsTreeProvider {
-  const provider = new GlueSessionsTreeProvider(connectionManager);
+  const provider = new GlueSessionsTreeProvider(glueBackend);
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider(GLUE_SESSIONS_VIEW_ID, provider)
