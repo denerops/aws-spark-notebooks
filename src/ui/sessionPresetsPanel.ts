@@ -1,61 +1,28 @@
 import * as vscode from 'vscode';
-import type { SessionPresetStore } from '../session/presets';
+import type { SessionPreset, SessionPresetStore } from '../session/presets';
 import { SessionPresetsController } from './sessionPresetsController';
+import {
+  createPresetEditorPanelHost,
+  type PresetEditorPanelOptions,
+} from '../presets/presetEditorPanel';
 
-export interface SessionPresetsPanelOptions {
-  presetId?: string;
-  onMutated?: () => void;
-}
+export type SessionPresetsPanelOptions = PresetEditorPanelOptions;
+
+const host = createPresetEditorPanelHost<SessionPreset>({
+  viewType: 'emrServerlessSessionPresetsEditor',
+  defaultTitle: 'Session Preset',
+  emptyTitle: 'Session Preset',
+  titleForPreset: (preset) => `Preset: ${preset.name}`,
+  createController: (store, getWebview, options) =>
+    new SessionPresetsController(store, getWebview, options),
+});
 
 export class SessionPresetsPanel {
-  private static current: SessionPresetsPanel | undefined;
-  readonly controller: SessionPresetsController;
-
-  private constructor(
-    private readonly panel: vscode.WebviewPanel,
-    store: SessionPresetStore,
-    options?: SessionPresetsPanelOptions
-  ) {
-    this.controller = new SessionPresetsController(store, () => this.panel.webview, {
-      onMutated: options?.onMutated,
-      onPresetLoaded: (preset) => {
-        this.panel.title = preset ? `Preset: ${preset.name}` : 'Session Preset';
-      },
-      onDeleted: () => {
-        this.panel.dispose();
-      },
-    });
-    if (options?.presetId) {
-      this.controller.setSelectedId(options.presetId);
-    }
-    this.controller.bind(panel.webview);
-    panel.onDidDispose(() => {
-      SessionPresetsPanel.current = undefined;
-    });
-    void this.controller.refresh();
-  }
-
   static show(
-    _context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     store: SessionPresetStore,
     options?: SessionPresetsPanelOptions
   ): void {
-    if (SessionPresetsPanel.current) {
-      if (options?.presetId) {
-        SessionPresetsPanel.current.controller.setSelectedId(options.presetId);
-      }
-      SessionPresetsPanel.current.panel.reveal();
-      void SessionPresetsPanel.current.controller.refresh();
-      return;
-    }
-
-    const panel = vscode.window.createWebviewPanel(
-      'emrServerlessSessionPresetsEditor',
-      'Session Preset',
-      vscode.ViewColumn.One,
-      { enableScripts: true, retainContextWhenHidden: true }
-    );
-
-    SessionPresetsPanel.current = new SessionPresetsPanel(panel, store, options);
+    host.show(context, store, options);
   }
 }

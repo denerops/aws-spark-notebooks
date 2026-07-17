@@ -31,3 +31,11 @@ _Avoid_: Livy session (when meaning the unified handle), Glue session (same)
 **Standalone Session**:
 A Spark session created or managed without a notebook. It has no Notebook Connection until something attaches a notebook to it.
 _Avoid_: orphan session, background session
+
+**Session Preset**:
+A named, reusable configuration for creating sessions on one Spark Backend (EMR and Glue each have their own preset shape).
+_Avoid_: template, profile, config set
+
+**Preset Source**:
+Where a Session Preset is stored: workspace file or user (global) storage. When the same id exists in both, workspace wins.
+_Avoid_: scope, origin
