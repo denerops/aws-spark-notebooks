@@ -8,7 +8,7 @@
 #   ./scripts/apply-github-settings.sh --owner denerops --repo aws-spark-notebooks
 #
 # What this configures:
-#   1. Repository ruleset on main — merge blocked until CI job checks pass
+#   1. Repository ruleset on main — require PR + CI job checks before merge
 #   2. Admin role bypass on that ruleset (semantic-release via GH_ADMIN_PAT)
 #   3. Removes legacy branch protection (avoids duplicate required checks)
 #   4. Most permissive workflow approval policy allowed by GitHub's API
@@ -176,13 +176,14 @@ cat <<EOF
 
 Done.
 
-Merge to main is now blocked until these GitHub Actions job checks pass:
-  - verify
-  - semantic-pull-request
+main now requires:
+  - a pull request (direct pushes blocked for non-bypass actors)
+  - GitHub Actions checks: verify, semantic-pull-request
 
 Notes:
   - Required check names must match workflow job ids (not the UI label with workflow prefix).
-  - Repository Admins can bypass the ruleset (Release uses GH_ADMIN_PAT to push chore(release) commits).
+  - Repository Admins can still bypass (Release uses GH_ADMIN_PAT for chore(release) commits).
+  - That same Admin bypass means your local git push to main can still succeed — use feature branches by habit.
   - Legacy branch protection was removed to avoid duplicate "Expected" checks.
   - GitHub may still require one manual "Approve and run" when a PR changes .github/workflows/.
 
