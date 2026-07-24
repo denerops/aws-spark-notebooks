@@ -22,7 +22,11 @@ import { promptSparkConnection } from './ui/connectWizard';
 import { applyAwsProfileChange, promptAwsProfileSelection } from './aws/profile';
 import { runAwsDiagnostics } from './aws/diagnostics';
 import { applyAwsRegionChange, promptAwsRegionSelection, syncRegionFromProfile } from './aws/region';
-import { initializeAwsContext, refreshAwsTransportContext } from './aws/credentials';
+import { initializeAwsContext, refreshAwsTransportContext, resetAwsClients } from './aws/credentials';
+import {
+  initializeExtensionCredentials,
+  promptExtensionCredentials,
+} from './aws/extensionCredentials';
 import { resetProxyConfig } from './aws/proxyConfig';
 import { resetEmrServerlessService } from './aws/emrServerlessClient';
 import { resetGlueSessionService } from './glue/glueSessionService';
@@ -38,6 +42,11 @@ let glueSessionsTree: ReturnType<typeof registerGlueSessionsTree>;
 let kernelManager: EmrKernelManager;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  initializeExtensionCredentials(context, () => {
+    resetAwsClients();
+    resetEmrServerlessService();
+    resetGlueSessionService();
+  });
   await initializeAwsContext();
 
   const emrBackend = new EmrSparkBackend();
@@ -72,7 +81,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     statusBar.update(notebook);
   };
 
-  const refreshAfterAwsContextChange = async (reason: 'profile' | 'region' | 'both'): Promise<void> => {
+  const refreshAfterAwsContextChange = async (
+    reason: 'profile' | 'region' | 'both' | 'credentials'
+  ): Promise<void> => {
     const hadBindings = connection.hasAnyBindings();
 
     if (hadBindings) {
@@ -82,7 +93,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           ? 'Disconnected notebook sessions because the AWS profile or region changed.'
           : reason === 'profile'
             ? 'Disconnected notebook sessions because the AWS profile changed.'
-            : 'Disconnected notebook sessions because the AWS region changed.';
+            : reason === 'credentials'
+              ? 'Disconnected notebook sessions because AWS credentials changed.'
+              : 'Disconnected notebook sessions because the AWS region changed.';
       void vscode.window.showWarningMessage(message);
       for (const notebook of vscode.workspace.notebookDocuments) {
         if (isEmrSparkNotebook(notebook)) {
@@ -152,6 +165,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.selectAwsProfile', async () => {
       await promptAwsProfileSelection();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('emrServerless.setAwsCredentials', async () => {
+      const changed = await promptExtensionCredentials();
+      if (changed) {
+        await refreshAfterAwsContextChange('credentials');
+      }
     })
   );
 
