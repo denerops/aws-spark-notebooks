@@ -212,7 +212,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
   <section id="prerequisites">
     <h2>Prerequisites</h2>
     <ul>
-      <li>AWS credentials in <code>~/.aws/credentials</code> and a default <strong>region</strong> in <code>~/.aws/config</code></li>
+      <li>AWS credentials via <code>~/.aws/credentials</code> (or <strong>Config → AWS Credentials</strong> on Windows) and a default <strong>region</strong> in <code>~/.aws/config</code> / Config sidebar</li>
       <li>IAM permissions for the backend you use (<code>emr-serverless:*</code> and/or <code>glue:*</code> session APIs) plus <code>iam:PassRole</code></li>
       <li>A job execution role ARN (configure in settings or session presets)</li>
     </ul>
@@ -224,14 +224,14 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
     <ul>
       <li>An IAM role that Glue can assume for interactive sessions</li>
     </ul>
-    <div class="tip">Use the <strong>Config</strong> sidebar view to set <strong>AWS Profile</strong> and <strong>AWS Region</strong> before connecting.</div>
+    <div class="tip">Use the <strong>Config</strong> sidebar to set <strong>AWS Credentials</strong> (optional override), <strong>AWS Profile</strong>, and <strong>AWS Region</strong> before connecting. On Windows, if the extension cannot read <code>%USERPROFILE%\.aws</code>, paste access keys under <strong>AWS Credentials</strong>.</div>
   </section>
 
   <section id="quick-start">
     <h2>Quick start</h2>
     <ol>
       <li>Open the <strong>AWS Spark</strong> activity bar (cloud + spark icon).</li>
-      <li>Set <strong>AWS Profile</strong> and <strong>AWS Region</strong> in the <strong>Config</strong> view.</li>
+      <li>Set <strong>AWS Credentials</strong> (if needed), <strong>AWS Profile</strong>, and <strong>AWS Region</strong> in the <strong>Config</strong> view.</li>
       <li>Run <strong>EMR Serverless: New EMR Serverless Notebook</strong> or open an existing <code>.ipynb</code> file.</li>
       <li>Use the <strong>kernel picker</strong> or run a cell — choose <strong>EMR Serverless</strong> or <strong>Glue Interactive Sessions</strong>.</li>
       <li>For EMR: refresh <strong>Applications</strong>, start a stopped app, then attach or create a Livy session.</li>
@@ -279,6 +279,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
     <table>
       <thead><tr><th>Level</th><th>Item</th><th>Action</th></tr></thead>
       <tbody>
+        <tr><td>1</td><td><strong>AWS Credentials</strong></td><td>Optional access keys in extension Secret Storage (overrides profile; helpful on Windows)</td></tr>
         <tr><td>1</td><td><strong>AWS Profile</strong></td><td>Click to pick a profile or use auto (environment)</td></tr>
         <tr><td>1</td><td><strong>AWS Region</strong></td><td>Click to pick the region for AWS API calls</td></tr>
         <tr><td>1</td><td><strong>Session Presets</strong></td><td>Expand to browse EMR and Glue presets</td></tr>
@@ -359,7 +360,7 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
         <tr><td><code>$(globe) Spark UI</code></td><td>Open Spark UI (when a notebook is connected)</td></tr>
       </tbody>
     </table>
-    <p>AWS profile and region are in the <strong>Config</strong> sidebar view.</p>
+    <p>AWS credentials, profile, and region are in the <strong>Config</strong> sidebar view.</p>
   </section>
 
   <section id="commands">
@@ -391,7 +392,8 @@ export function renderWelcomePageHtml(webview: vscode.Webview, extensionUri: vsc
       <thead><tr><th>Command</th><th>Description</th></tr></thead>
       <tbody>
         <tr><td>Disconnect Notebook Session</td><td>Unbind notebook from session</td></tr>
-        <tr><td>Select AWS Profile / Region</td><td>Change credentials or region</td></tr>
+        <tr><td>Set AWS Credentials</td><td>Store access keys in extension Secret Storage (Windows-friendly override)</td></tr>
+        <tr><td>Select AWS Profile / Region</td><td>Change profile or region</td></tr>
         <tr><td>Open Spark UI</td><td>Open dashboard for connected session</td></tr>
         <tr><td>Help</td><td>Open this page</td></tr>
       </tbody>

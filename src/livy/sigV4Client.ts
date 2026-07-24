@@ -28,7 +28,9 @@ export class LivySigV4Client {
     const provider = getCredentialProvider();
     const creds = await provider();
     if (!creds.accessKeyId || !creds.secretAccessKey) {
-      throw new Error('AWS credentials not found. Configure ~/.aws/credentials or environment variables.');
+      throw new Error(
+        'AWS credentials not found. Configure ~/.aws/credentials, environment variables, or Config → AWS Credentials.'
+      );
     }
     this.credentials = creds;
   }

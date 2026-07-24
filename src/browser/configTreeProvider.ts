@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { getEmrServerlessService } from '../aws/emrServerlessClient';
 import { getConfiguredAwsProfile, getConfiguredAwsRegion } from '../aws/config';
+import { hasExtensionCredentials } from '../aws/extensionCredentials';
 import { getProfileDisplayLabel } from '../aws/profile';
 import type { SessionPreset, SessionPresetStore } from '../session/presets';
 import type { GlueSessionPreset, GlueSessionPresetStore } from '../glue/presets';
@@ -8,6 +9,7 @@ import type { GlueSessionPreset, GlueSessionPresetStore } from '../glue/presets'
 export const CONFIG_VIEW_ID = 'emrServerlessConfig';
 
 export type ConfigNodeKind =
+  | 'awsCredentials'
   | 'awsProfile'
   | 'awsRegion'
   | 'emrPresetsRoot'
@@ -72,6 +74,8 @@ function contextValueForKind(
 
 function iconForKind(kind: ConfigNodeKind): vscode.ThemeIcon {
   switch (kind) {
+    case 'awsCredentials':
+      return new vscode.ThemeIcon('lock');
     case 'awsProfile':
       return new vscode.ThemeIcon('key');
     case 'awsRegion':
@@ -166,6 +170,7 @@ export class ConfigTreeProvider implements vscode.TreeDataProvider<ConfigTreeIte
 
   private region = '';
   private profileLabel = '';
+  private extensionCredentialsSet = false;
   private emrPresets: SessionPreset[] = [];
   private gluePresets: GlueSessionPreset[] = [];
 
@@ -199,6 +204,7 @@ export class ConfigTreeProvider implements vscode.TreeDataProvider<ConfigTreeIte
       this.region = '';
     }
     this.profileLabel = await getProfileDisplayLabel();
+    this.extensionCredentialsSet = await hasExtensionCredentials();
     this.refresh();
   }
 
@@ -213,6 +219,7 @@ export class ConfigTreeProvider implements vscode.TreeDataProvider<ConfigTreeIte
   getChildren(element?: ConfigTreeItem): ConfigTreeItem[] {
     if (!element) {
       return [
+        this.buildCredentialsItem(),
         this.buildProfileItem(),
         this.buildRegionItem(),
         this.buildEmrPresetsRootItem(),
@@ -245,14 +252,35 @@ export class ConfigTreeProvider implements vscode.TreeDataProvider<ConfigTreeIte
     return [];
   }
 
+  private buildCredentialsItem(): ConfigTreeItem {
+    return new ConfigTreeItem(
+      'awsCredentials',
+      'AWS Credentials',
+      vscode.TreeItemCollapsibleState.None,
+      {
+        description: this.extensionCredentialsSet ? 'extension (overrides profile)' : 'profile / env',
+        tooltip: this.extensionCredentialsSet
+          ? 'Using access keys stored in extension Secret Storage — click to change or clear'
+          : 'Using ~/.aws profile or environment variables — click to set access keys (helpful on Windows)',
+        command: {
+          command: 'emrServerless.setAwsCredentials',
+          title: 'Set AWS Credentials',
+        },
+      }
+    );
+  }
+
   private buildProfileItem(): ConfigTreeItem {
     const configured = getConfiguredAwsProfile();
     const value = configured ?? this.profileLabel;
+    const overridden = this.extensionCredentialsSet
+      ? ' (ignored while extension credentials are set)'
+      : '';
     return new ConfigTreeItem('awsProfile', 'AWS Profile', vscode.TreeItemCollapsibleState.None, {
       description: value || 'auto',
       tooltip: configured
-        ? `AWS profile: ${configured} — click to change`
-        : `AWS credentials: ${this.profileLabel} — click to change`,
+        ? `AWS profile: ${configured}${overridden} — click to change`
+        : `AWS credentials: ${this.profileLabel}${overridden} — click to change`,
       command: {
         command: 'emrServerless.selectAwsProfile',
         title: 'Select AWS Profile',

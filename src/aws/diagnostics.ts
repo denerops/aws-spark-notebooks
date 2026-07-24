@@ -9,6 +9,7 @@ import {
   getEffectiveAwsProfile,
   getResolvedAutoProfile,
 } from './credentials';
+import { getExtensionCredentials, hasExtensionCredentials } from './extensionCredentials';
 import { getEmrServerlessService } from './emrServerlessClient';
 import { describeProxyForHost } from './proxyConfig';
 
@@ -44,6 +45,10 @@ export async function runAwsDiagnostics(): Promise<void> {
     line('Auto-resolved SSO profile', getResolvedAutoProfile() ?? '(none)'),
     line('Effective profile used by extension', getEffectiveAwsProfile()),
     line('Configured emrServerless.awsRegion', getConfiguredAwsRegion() ?? '(empty)'),
+    line(
+      'Extension Secret Storage credentials',
+      (await hasExtensionCredentials()) ? 'SET (override profile / ~/.aws)' : 'not set'
+    ),
   ];
 
   try {
@@ -113,8 +118,13 @@ export async function runAwsDiagnostics(): Promise<void> {
   lines.push('', '=== Resolved credentials (from extension SDK) ===');
 
   try {
+    const extensionCreds = await getExtensionCredentials();
     const creds = await getCredentialProvider()();
     lines.push(
+      line(
+        'credential source',
+        extensionCreds ? 'extension Secret Storage' : 'profile / env (~/.aws or AWS_* env)'
+      ),
       line('accessKeyId', creds.accessKeyId ? maskAccessKey(creds.accessKeyId) : '(missing)'),
       line('has sessionToken', creds.sessionToken ? 'yes' : 'no'),
       line('expiration', creds.expiration ? creds.expiration.toISOString() : '(none)')
@@ -125,6 +135,9 @@ export async function runAwsDiagnostics(): Promise<void> {
     }
   } catch (error) {
     lines.push(`ERROR resolving credentials — ${error instanceof Error ? error.message : String(error)}`);
+    lines.push(
+      'Tip (Windows): if ~/.aws is missing from the paths above, use Config → AWS Credentials to paste access keys into extension Secret Storage.'
+    );
   }
 
   lines.push('', '=== Glue Interactive Sessions API test ===');
@@ -167,7 +180,8 @@ export async function runAwsDiagnostics(): Promise<void> {
     '1. If CLI works but effective profile here differs from your terminal profile → select the correct profile in Config sidebar.',
     '2. If credentials resolve but API test fails with "security token" → run `aws sso login --profile ' + profile + '` then reload the window.',
     '3. If home/config paths differ from where you ran `aws sso login` → extension and CLI are reading different AWS files.',
-    '4. If proxy route is unexpected → align http.proxy / HTTP_PROXY with your corporate proxy settings.'
+    '4. On Windows, if Expected credentials path has no file but CLI works → use Config → AWS Credentials (extension Secret Storage).',
+    '5. If proxy route is unexpected → align http.proxy / HTTP_PROXY with your corporate proxy settings.'
   );
 
   channel.appendLine(lines.join('\n'));

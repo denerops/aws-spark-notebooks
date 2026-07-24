@@ -18,7 +18,7 @@ A VS Code / Cursor extension for running **PySpark** and **Spark SQL** in `.spar
 
 - VS Code 1.88+ or Cursor
 - Node.js 18+ (for building from source)
-- AWS CLI credentials configured locally (`~/.aws/credentials` and `~/.aws/config` with a default **region**)
+- AWS CLI credentials configured locally (`~/.aws/credentials` and `~/.aws/config` with a default **region**). On Windows, if the extension host cannot read those files, use **Config → AWS Credentials** to store access keys in VS Code Secret Storage.
 - IAM permissions for the backend(s) you use (see [IAM permissions](#iam-permissions))
 - A job **execution role** ARN with `iam:PassRole`
 
@@ -91,6 +91,7 @@ AWS credentials and session presets for both backends:
 
 | Level | Item | Action |
 |-------|------|--------|
+| 1 | **AWS Credentials** | Optional access keys in extension Secret Storage (overrides profile; helpful on Windows) |
 | 1 | **AWS Profile** | Click to pick a profile or use auto (environment) |
 | 1 | **AWS Region** | Click to pick the region for AWS API calls |
 | 1 | **Session Presets** | Expand to browse EMR and Glue presets |
@@ -176,6 +177,7 @@ Connecting prompts you to choose **EMR Serverless** or **Glue Interactive Sessio
 | Select EMR Serverless Session | Same as Connect, for the active notebook |
 | Disconnect Notebook Session | Unbind notebook (session keeps running) |
 | Select AWS Profile | Pick a profile from `~/.aws/credentials` / `~/.aws/config` |
+| Set AWS Credentials | Store access keys in extension Secret Storage (overrides profile; useful on Windows) |
 | Select AWS Region | Pick region for AWS API calls |
 | Verify AWS Credentials | Run credential diagnostics |
 | Refresh | Reload EMR applications list |
@@ -233,7 +235,7 @@ Search **EMR Serverless** or **Glue Interactive** in Settings (`Cmd/Ctrl+,`).
 | `glueInteractive.sessionPresets.workspaceFile` | `.vscode/glue-interactive-presets.json` | Team-shared Glue presets file |
 | `glueInteractive.sessionPresets.preferWorkspace` | `true` | Default new presets to the workspace file |
 
-Click **AWS Profile** or **AWS Region** in the **Config** sidebar to change credentials or region. Changing profile or region disconnects open notebook sessions.
+Click **AWS Credentials**, **AWS Profile**, or **AWS Region** in the **Config** sidebar to change auth or region. Changing credentials, profile, or region disconnects open notebook sessions.
 
 ## Notebook format (`.sparknb` / `.ipynb`)
 
@@ -511,7 +513,7 @@ The spike lists Livy-enabled EMR applications, optionally starts a test session,
 - **EMR control plane:** `@aws-sdk/client-emr-serverless` — list/start/stop applications, dashboard URLs
 - **EMR data plane:** SigV4-signed HTTP to the per-application Livy endpoint
 - **Glue:** `@aws-sdk/client-glue` — CreateSession, RunStatement, GetDashboardUrl, etc.
-- **Credentials:** `@aws-sdk/credential-providers` — default chain or explicit profile via `emrServerless.awsProfile`
+- **Credentials:** extension Secret Storage override, then `@aws-sdk/credential-providers` `fromIni` / `fromEnv`, or profile via `emrServerless.awsProfile`
 - **Table renderer:** custom MIME type `application/vnd.emr-spark.table+json` rendered in a notebook webview
 
 ## License

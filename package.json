@@ -107,6 +107,11 @@
         "category": "EMR Serverless"
       },
       {
+        "command": "emrServerless.setAwsCredentials",
+        "title": "Set AWS Credentials",
+        "category": "EMR Serverless"
+      },
+      {
         "command": "emrServerless.selectAwsRegion",
         "title": "Select AWS Region",
         "category": "EMR Serverless"
@@ -335,6 +340,9 @@
         },
         {
           "command": "emrServerless.verifyAwsCredentials"
+        },
+        {
+          "command": "emrServerless.setAwsCredentials"
         },
         {
           "command": "emrServerless.openSessionPresets"
