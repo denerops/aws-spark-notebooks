@@ -3,10 +3,13 @@ import { getEmrServerlessService } from '../aws/emrServerlessClient';
 import type { EmrSparkBackend } from '../emr/connectionManager';
 import type { NotebookConnection } from '../platform/notebookConnection';
 import { createBlankSparknbDocument, createStarterSparknbDocument } from '../notebook/defaultDocument';
-import { LivySession } from '../livy/session';
+import { LivySigV4Client } from '../livy/sigV4Client';
+import { getDefaultRegion } from '../aws/credentials';
 import { getSessionPresetStore } from '../session/presets';
+import { diagnoseLivyStartupFailure, SessionStartupFailureError } from '../session/diagnoseStartupFailure';
 import { pickSessionPreset } from '../ui/pickSessionPreset';
 import { promptSessionName } from '../ui/promptSessionName';
+import { reportSessionStartupFailure, showSessionStartupLogs } from '../ui/sessionStartupError';
 import { openEmrSparkNotebook } from '../notebook/openNotebook';
 import { isEmrSparkNotebook } from '../notebook/types';
 import {
@@ -105,6 +108,7 @@ export function registerApplicationsActions(
           kind?: string;
           owner?: string;
           appId?: string;
+          log?: string[];
         }
       ) => {
         if (!applicationId || !info) {
@@ -117,6 +121,7 @@ export function registerApplicationsActions(
           kind: info.kind ?? 'pyspark',
           owner: info.owner,
           appId: info.appId,
+          log: info.log,
         });
       }
     )
@@ -273,8 +278,7 @@ export function registerApplicationsActions(
           void vscode.commands.executeCommand('emrServerless.refreshApplications');
           void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          vscode.window.showErrorMessage(message);
+          await reportSessionStartupFailure(error);
         }
       }
     )
@@ -299,12 +303,8 @@ export function registerApplicationsActions(
         }
         try {
           const region = item.context.region!;
-          try {
-            const session = await LivySession.attach(appId, region, sessionId);
-            await session.stop();
-          } catch {
-            // Session may already be stopped.
-          }
+          const client = new LivySigV4Client(appId, region);
+          await client.deleteSession(sessionId);
 
           const notebooks = await connection.detachForEmrSession(appId, sessionId);
           for (const notebook of notebooks) {
@@ -318,6 +318,42 @@ export function registerApplicationsActions(
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
         }
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'emrServerless.viewSessionLogs',
+      async (item?: ApplicationsTreeItem) => {
+        const appId = item?.context.applicationId;
+        const sessionId = item?.context.sessionId;
+        if (!appId || sessionId === undefined) {
+          return;
+        }
+
+        let failure = tree.getSessionFailure(appId, sessionId);
+        if (!failure || failure.logLines.length === 0) {
+          try {
+            const region = item.context.region ?? (await getDefaultRegion());
+            const client = new LivySigV4Client(appId, region);
+            const [info, logLines] = await Promise.all([
+              client.getSession(sessionId),
+              client.getSessionLog(sessionId).catch(() => [] as string[]),
+            ]);
+            failure = diagnoseLivyStartupFailure({
+              state: info.state,
+              logLines: logLines.length > 0 ? logLines : info.log,
+              sessionId,
+            });
+            tree.recordStartupFailure(appId, failure);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Could not load session logs: ${message}`);
+            return;
+          }
+        }
+        showSessionStartupLogs(failure);
       }
     )
   );
@@ -386,6 +422,7 @@ export function registerApplicationsActions(
             kind?: string;
             owner?: string;
             appId?: string;
+            log?: string[];
           }) => {
             tree.upsertSession(appId, {
               id: info.id,
@@ -394,6 +431,7 @@ export function registerApplicationsActions(
               kind: info.kind ?? 'pyspark',
               owner: info.owner,
               appId: info.appId,
+              log: info.log,
             });
           };
 
@@ -441,13 +479,11 @@ export function registerApplicationsActions(
           tree.refresh();
         } catch (error) {
           tree.clearSessionCreating(appId);
-          tree.refresh();
-          const message = error instanceof Error ? error.message : String(error);
-          if (message.includes('already being created')) {
-            vscode.window.showInformationMessage(message);
-          } else {
-            vscode.window.showErrorMessage(message);
+          if (error instanceof SessionStartupFailureError) {
+            tree.recordStartupFailure(appId, error.failure);
           }
+          tree.refresh();
+          await reportSessionStartupFailure(error);
         }
       }
     )

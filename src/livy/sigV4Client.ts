@@ -167,6 +167,23 @@ export class LivySigV4Client {
     await this.parseJson(response);
   }
 
+  async getSessionLog(
+    sessionId: number,
+    options?: { from?: number; size?: number }
+  ): Promise<string[]> {
+    const from = options?.from ?? 0;
+    const size = options?.size ?? 1000;
+    const response = await this.signedFetch(
+      'GET',
+      `/sessions/${sessionId}/log?from=${from}&size=${size}`
+    );
+    const data = await this.parseJson<unknown>(response);
+    if (data && typeof data === 'object' && Array.isArray((data as { log?: unknown }).log)) {
+      return (data as { log: unknown[] }).log.map(String);
+    }
+    return [];
+  }
+
   async submitStatement(
     sessionId: number,
     code: string,

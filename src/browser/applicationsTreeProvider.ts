@@ -3,6 +3,10 @@ import type { LivyApplication } from '../aws/emrServerlessClient';
 import { formatAwsAuthError } from '../aws/credentials';
 import type { EmrSparkBackend } from '../emr/connectionManager';
 import { formatLivySessionLabel, type LivySessionInfo } from '../livy/types';
+import {
+  diagnoseLivyStartupFailure,
+  type SessionStartupFailure,
+} from '../session/diagnoseStartupFailure';
 
 export const APPLICATIONS_VIEW_ID = 'emrServerlessApplications';
 
@@ -15,6 +19,7 @@ export type AppTreeNodeKind =
   | 'applicationRunning'
   | 'session'
   | 'sessionStarting'
+  | 'sessionDead'
   | 'loading'
   | 'error'
   | 'empty';
@@ -62,6 +67,8 @@ function iconForKind(kind: AppTreeNodeKind): vscode.ThemeIcon {
       return new vscode.ThemeIcon('debug-disconnect');
     case 'session':
       return new vscode.ThemeIcon('symbol-method');
+    case 'sessionDead':
+      return new vscode.ThemeIcon('error');
     case 'loading':
       return new vscode.ThemeIcon('loading~spin');
     case 'error':
@@ -89,9 +96,20 @@ function kindForApplicationState(state: string): AppTreeNodeKind {
 }
 
 const SESSION_STARTING_STATES = new Set(['not_started', 'starting', 'recovering']);
+const SESSION_DEAD_STATES = new Set(['dead', 'error', 'killed', 'shutting_down']);
 
 function kindForSessionState(state: string): AppTreeNodeKind {
-  return SESSION_STARTING_STATES.has(state) ? 'sessionStarting' : 'session';
+  if (SESSION_STARTING_STATES.has(state)) {
+    return 'sessionStarting';
+  }
+  if (SESSION_DEAD_STATES.has(state)) {
+    return 'sessionDead';
+  }
+  return 'session';
+}
+
+function sessionFailureKey(applicationId: string, sessionId: number): string {
+  return `${applicationId}:${sessionId}`;
 }
 
 export class ApplicationsTreeProvider implements vscode.TreeDataProvider<ApplicationsTreeItem> {
@@ -102,6 +120,7 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
   private sessionsByApp = new Map<string, LivySessionInfo[]>();
   /** Apps with a session create in flight before Livy returns a session id. */
   private readonly pendingSessionCreate = new Map<string, string | undefined>();
+  private readonly sessionFailures = new Map<string, SessionStartupFailure>();
   private region = '';
   private loadError: string | undefined;
   private loading = false;
@@ -144,7 +163,60 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
       next.push(session);
     }
     this.sessionsByApp.set(applicationId, next);
+    this.maybeRecordFailureFromSession(applicationId, next[index >= 0 ? index : next.length - 1]!);
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  recordStartupFailure(applicationId: string, failure: SessionStartupFailure): void {
+    const sessionId = failure.sessionId;
+    if (typeof sessionId !== 'number') {
+      return;
+    }
+    this.sessionFailures.set(sessionFailureKey(applicationId, sessionId), failure);
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  getSessionFailure(
+    applicationId: string,
+    sessionId: number
+  ): SessionStartupFailure | undefined {
+    return this.sessionFailures.get(sessionFailureKey(applicationId, sessionId));
+  }
+
+  private maybeRecordFailureFromSession(applicationId: string, session: LivySessionInfo): void {
+    if (!SESSION_DEAD_STATES.has(session.state)) {
+      return;
+    }
+    const key = sessionFailureKey(applicationId, session.id);
+    const existing = this.sessionFailures.get(key);
+    if (existing && existing.logLines.length > 0) {
+      return;
+    }
+    if (!session.log?.length && existing) {
+      return;
+    }
+    this.sessionFailures.set(
+      key,
+      diagnoseLivyStartupFailure({
+        state: session.state,
+        logLines: session.log,
+        sessionId: session.id,
+      })
+    );
+  }
+
+  private pruneSessionFailures(): void {
+    const alive = new Set<string>();
+    for (const [appId, sessions] of this.sessionsByApp) {
+      for (const session of sessions) {
+        alive.add(sessionFailureKey(appId, session.id));
+      }
+    }
+    for (const key of [...this.sessionFailures.keys()]) {
+      if (!alive.has(key)) {
+        this.sessionFailures.delete(key);
+      }
+    }
   }
 
   clearSessionCreating(applicationId: string): void {
@@ -167,11 +239,15 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
           try {
             const sessions = await this.emrBackend.listSessions(app.id);
             this.sessionsByApp.set(app.id, sessions);
+            for (const session of sessions) {
+              this.maybeRecordFailureFromSession(app.id, session);
+            }
           } catch {
             this.sessionsByApp.set(app.id, []);
           }
         }
       }
+      this.pruneSessionFailures();
     } catch (error) {
       this.loadError = formatAwsAuthError(error);
       this.applications = [];
@@ -256,6 +332,9 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
       const sessions = this.sessionsByApp.get(element.context.applicationId) ?? [];
       const items: ApplicationsTreeItem[] = sessions.map((session) => {
         const kind = kindForSessionState(session.state);
+        const failure = this.sessionFailures.get(
+          sessionFailureKey(element.context.applicationId!, session.id)
+        );
         return new ApplicationsTreeItem(
           kind,
           {
@@ -269,7 +348,7 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
           vscode.TreeItemCollapsibleState.None,
           {
             description: `${session.state} · ${session.kind ?? 'pyspark'}`,
-            tooltip: `Session ${session.id}${session.name ? `\nName: ${session.name}` : ''}\nOwner: ${session.owner ?? 'unknown'}`,
+            tooltip: formatSessionTooltip(session, failure),
           }
         );
       });
@@ -316,6 +395,21 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
   getApplication(applicationId: string): LivyApplication | undefined {
     return this.applications.find((a) => a.id === applicationId);
   }
+}
+
+function formatSessionTooltip(
+  session: LivySessionInfo,
+  failure?: SessionStartupFailure
+): string {
+  return [
+    `Session ${session.id}`,
+    session.name ? `Name: ${session.name}` : undefined,
+    `Owner: ${session.owner ?? 'unknown'}`,
+    `State: ${session.state}`,
+    failure?.summary,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 export function registerApplicationsTree(

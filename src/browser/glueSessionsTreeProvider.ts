@@ -10,6 +10,7 @@ export type GlueTreeNodeKind =
   | 'sessionReady'
   | 'sessionProvisioning'
   | 'sessionStopped'
+  | 'sessionFailed'
   | 'loading'
   | 'error'
   | 'empty';
@@ -50,6 +51,8 @@ function iconForKind(kind: GlueTreeNodeKind): vscode.ThemeIcon {
       return new vscode.ThemeIcon('loading~spin');
     case 'sessionStopped':
       return new vscode.ThemeIcon('debug-disconnect');
+    case 'sessionFailed':
+      return new vscode.ThemeIcon('error');
     case 'loading':
       return new vscode.ThemeIcon('loading~spin');
     case 'error':
@@ -66,10 +69,11 @@ function kindForStatus(status: string): GlueTreeNodeKind {
     case 'PROVISIONING':
       return 'sessionProvisioning';
     case 'STOPPED':
-    case 'FAILED':
-    case 'TIMEOUT':
     case 'STOPPING':
       return 'sessionStopped';
+    case 'FAILED':
+    case 'TIMEOUT':
+      return 'sessionFailed';
     default:
       return 'session';
   }
@@ -156,6 +160,7 @@ export class GlueSessionsTreeProvider implements vscode.TreeDataProvider<GlueSes
             session.description ? `Description: ${session.description}` : undefined,
             session.glueVersion ? `Glue ${session.glueVersion}` : undefined,
             session.role ? `Role: ${session.role}` : undefined,
+            session.errorMessage ? session.errorMessage : undefined,
           ]
             .filter(Boolean)
             .join('\n'),

@@ -16,6 +16,10 @@ import { getCredentialProvider, getDefaultRegion } from '../aws/credentials';
 import { getAwsClientTransportConfig } from '../aws/proxyConfig';
 import { GLUE_REQUEST_ORIGIN } from '../aws/glueConfig';
 import { mapGlueSession, type GlueSessionSummary } from './types';
+import {
+  diagnoseGlueStartupFailure,
+  SessionStartupFailureError,
+} from '../session/diagnoseStartupFailure';
 
 export interface CreateGlueSessionInput {
   id: string;
@@ -141,7 +145,13 @@ export class GlueInteractiveSessionService {
         return session;
       }
       if (session.status === 'FAILED' || session.status === 'TIMEOUT' || session.status === 'STOPPED') {
-        throw new Error(`Glue session failed to start (status: ${session.status})`);
+        throw new SessionStartupFailureError(
+          diagnoseGlueStartupFailure({
+            status: session.status,
+            errorMessage: session.errorMessage,
+            sessionId: session.id,
+          })
+        );
       }
       await sleep(3000);
     }

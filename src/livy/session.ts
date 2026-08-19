@@ -2,6 +2,10 @@ import {
   getSessionStartupTimeoutSeconds,
   getStatementPollIntervalMs,
 } from '../aws/config';
+import {
+  diagnoseLivyStartupFailure,
+  SessionStartupFailureError,
+} from '../session/diagnoseStartupFailure';
 import { LivySigV4Client } from './sigV4Client';
 import type { LivySessionInfo, LivyStatement, StatementKind } from './types';
 import { EMR_DISPLAY_BOOTSTRAP } from './types';
@@ -99,7 +103,7 @@ export class LivySession {
     const client = new LivySigV4Client(applicationId, region);
     const info = await client.getSession(sessionId);
     if (DEAD_STATES.has(info.state)) {
-      throw new Error(`Session ${sessionId} is not active (state: ${info.state})`);
+      throw await errorForDeadLivySession(client, info);
     }
     const session = new LivySession(
       applicationId,
@@ -138,7 +142,7 @@ export class LivySession {
         return;
       }
       if (DEAD_STATES.has(info.state)) {
-        throw new Error(`Session failed to start (state: ${info.state})`);
+        throw await errorForDeadLivySession(this.client, info);
       }
       await sleep(2000);
     }
@@ -192,6 +196,35 @@ export class LivySession {
   getClient(): LivySigV4Client {
     return this.client;
   }
+}
+
+async function errorForDeadLivySession(
+  client: LivySigV4Client,
+  info: LivySessionInfo
+): Promise<SessionStartupFailureError> {
+  let logLines = info.log ?? [];
+  const first = diagnoseLivyStartupFailure({
+    state: info.state,
+    logLines,
+    sessionId: info.id,
+  });
+  if (first.category === 'unknown' || logLines.length === 0) {
+    try {
+      const extra = await client.getSessionLog(info.id);
+      if (extra.length > 0) {
+        logLines = extra;
+      }
+    } catch {
+      // Livy log endpoint is optional; keep whatever GET /sessions returned.
+    }
+  }
+  return new SessionStartupFailureError(
+    diagnoseLivyStartupFailure({
+      state: info.state,
+      logLines,
+      sessionId: info.id,
+    })
+  );
 }
 
 function sleep(ms: number): Promise<void> {

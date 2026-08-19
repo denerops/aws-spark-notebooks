@@ -4,6 +4,7 @@ import type { NotebookRef } from '../platform/notebookWorkspace';
 import type { SparkBackend } from '../platform/sparkBackend';
 import type { AttachTarget, KernelSelectionSteps } from './kernelSelectionSteps';
 import type { WizardQuickPickItem, WizardUi } from './wizardUi';
+import { SessionStartupFailureError } from '../session/diagnoseStartupFailure';
 
 const promptingNotebooks = new Set<string>();
 
@@ -122,6 +123,11 @@ export async function selectKernel(
     ui.showInformationMessage(`Attached to ${sessionPick.target.label}.`);
     return true;
   } catch (error) {
+    if (error instanceof SessionStartupFailureError) {
+      const { reportSessionStartupFailure } = await import('./sessionStartupError');
+      await reportSessionStartupFailure(error);
+      return false;
+    }
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes('already being created')) {
       ui.showInformationMessage(message);

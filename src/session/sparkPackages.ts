@@ -1,4 +1,7 @@
-const PACKAGE_SPEC_PATTERN = /^[^\s,;&|`$()]+$/;
+/** Maven GAV: group:artifact:version with optional extra classifier/packaging segments. */
+export const SPARK_PACKAGE_SPEC_PATTERN_SOURCE =
+  '^(?:[^:\\s,;&|`$()]+:){2,4}[^:\\s,;&|`$()]+$';
+const PACKAGE_SPEC_PATTERN = new RegExp(SPARK_PACKAGE_SPEC_PATTERN_SOURCE);
 export const SPARK_JARS_PACKAGES_KEY = 'spark.jars.packages';
 
 export function normalizeSparkPackages(packages?: string[]): string[] {
@@ -22,7 +25,9 @@ export function normalizeSparkPackages(packages?: string[]): string[] {
 export function assertValidSparkPackageSpecs(packages: string[]): void {
   const invalid = packages.filter((spec) => !PACKAGE_SPEC_PATTERN.test(spec));
   if (invalid.length > 0) {
-    throw new Error(`Invalid Spark package spec(s): ${invalid.join(', ')}`);
+    throw new Error(
+      `Invalid Spark package spec(s): ${invalid.join(', ')}. Use Maven coordinates group:artifact:version.`
+    );
   }
 }
 

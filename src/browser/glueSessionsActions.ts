@@ -6,6 +6,7 @@ import { GlueLivySession } from '../glue/glueSession';
 import { getGlueSessionPresetStore } from '../glue/presets';
 import { pickGlueSessionPreset } from '../ui/pickGlueSessionPreset';
 import { promptSessionName } from '../ui/promptSessionName';
+import { reportSessionStartupFailure } from '../ui/sessionStartupError';
 import { openEmrSparkNotebook } from '../notebook/openNotebook';
 import { isEmrSparkNotebook } from '../notebook/types';
 import { createBlankSparknbDocument } from '../notebook/defaultDocument';
@@ -112,8 +113,7 @@ export function registerGlueSessionsActions(
         void vscode.commands.executeCommand('glueInteractive.refreshSessions');
         void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(message);
+        await reportSessionStartupFailure(error);
       }
     })
   );
@@ -252,12 +252,7 @@ export function registerGlueSessionsActions(
         });
         tree.refresh();
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message.includes('already being created')) {
-          vscode.window.showInformationMessage(message);
-        } else {
-          vscode.window.showErrorMessage(message);
-        }
+        await reportSessionStartupFailure(error);
       }
     })
   );
