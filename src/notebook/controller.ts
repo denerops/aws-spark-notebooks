@@ -1,10 +1,7 @@
 import * as vscode from 'vscode';
 import type { NotebookConnection } from '../platform/notebookConnection';
 import { getExtensionConfig, getMaxRows } from '../aws/config';
-import {
-  cellConfiguresSparkCatalog,
-  SPARK_CATALOG_CELL_WARNING,
-} from '../aws/icebergConfig';
+import { collectSparkCellHints } from './sparkCellHints';
 import { wrapLastExpressionForDisplay, isTabularSql, sqlToDisplayPySpark } from '../livy/codeTransform';
 import {
   isPipOnlyCell,
@@ -25,7 +22,7 @@ export class SparknbController implements vscode.Disposable {
   readonly supportedLanguages = ['python', 'sql'];
 
   private _executionOrder = 0;
-  private readonly catalogWarningShown = new Set<string>();
+  private readonly sparkHintShown = new Set<string>();
 
   constructor(private readonly connection: NotebookConnection) {}
 
@@ -140,20 +137,12 @@ export class SparknbController implements vscode.Disposable {
       }
 
       const executionTimeMs = Date.now() - startedAt;
-      const outputs = mapStatementToOutputs(stmt, executionTimeMs, maxRows);
-
-      if (
-        prepared.language === 'python' &&
-        cellConfiguresSparkCatalog(rawCode) &&
-        !this.catalogWarningShown.has(notebook.uri.toString())
-      ) {
-        this.catalogWarningShown.add(notebook.uri.toString());
-        outputs.unshift(
-          new vscode.NotebookCellOutput([
-            vscode.NotebookCellOutputItem.stdout(`${SPARK_CATALOG_CELL_WARNING}\n`),
-          ])
-        );
-      }
+      const outputs = this.withSparkCellHints(
+        notebook,
+        prepared.language,
+        rawCode,
+        mapStatementToOutputs(stmt, executionTimeMs, maxRows)
+      );
 
       if (session.dashboardUrl && !session.dashboardAnnounced) {
         const hintMinutes = getExtensionConfig().get<number>('dashboardRefreshHintMinutes', 55);
@@ -175,12 +164,47 @@ export class SparknbController implements vscode.Disposable {
         execution.end(false, Date.now());
       } else {
         const executionTimeMs = Date.now() - startedAt;
-        execution.replaceOutput(mapErrorToOutputs(error, executionTimeMs));
+        execution.replaceOutput(
+          this.withSparkCellHints(
+            notebook,
+            prepared.language,
+            rawCode,
+            mapErrorToOutputs(error, executionTimeMs),
+            { force: true }
+          )
+        );
         execution.end(false, Date.now());
       }
       return false;
     } finally {
       cancellationListener.dispose();
     }
+  }
+
+  private withSparkCellHints(
+    notebook: vscode.NotebookDocument,
+    language: string,
+    rawCode: string,
+    outputs: vscode.NotebookCellOutput[],
+    options?: { force?: boolean }
+  ): vscode.NotebookCellOutput[] {
+    if (language !== 'python') {
+      return outputs;
+    }
+    const hints = collectSparkCellHints(rawCode);
+    if (hints.length === 0) {
+      return outputs;
+    }
+    const key = notebook.uri.toString();
+    if (!options?.force && this.sparkHintShown.has(key)) {
+      return outputs;
+    }
+    this.sparkHintShown.add(key);
+    return [
+      new vscode.NotebookCellOutput([
+        vscode.NotebookCellOutputItem.stdout(`${hints.join('\n')}\n`),
+      ]),
+      ...outputs,
+    ];
   }
 }

@@ -60,15 +60,3 @@ export function getIcebergCatalogConfig(): Record<string, string> {
 export function getIcebergCatalogName(): string {
   return getExtensionConfig().get<string>('icebergCatalog.catalogName', 'spark_catalog');
 }
-
-/** True when a Python cell tries to configure catalogs via SparkSession.builder. */
-export function cellConfiguresSparkCatalog(code: string): boolean {
-  return (
-    /SparkSession\s*\.\s*builder/m.test(code) &&
-    /\.config\s*\(\s*['"]spark\.sql\.catalog\./m.test(code)
-  );
-}
-
-export const SPARK_CATALOG_CELL_WARNING =
-  'Catalog settings in SparkSession.builder are ignored — Livy already created Spark. ' +
-  'Register catalogs in Session Presets (Spark conf), then start a new session.';

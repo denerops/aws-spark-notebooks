@@ -57,6 +57,12 @@ export class EmrSparkBackend implements EmrSparkBackendAdapter {
     return this.create(params);
   }
 
+  async deleteSession(applicationId: string, sessionId: number): Promise<void> {
+    const region = await getDefaultRegion();
+    const client = new LivySigV4Client(applicationId, region);
+    await client.deleteSession(sessionId);
+  }
+
   async refreshDashboard(session: SparkSessionHandle): Promise<string | undefined> {
     const livy = this.unwrap(session);
     await livy.refreshState().catch(() => undefined);

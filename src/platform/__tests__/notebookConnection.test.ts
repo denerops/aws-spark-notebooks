@@ -306,6 +306,46 @@ describe('NotebookConnection live binding policy', () => {
     assert.equal(emr.createCalls.length, 1);
     assert.notEqual(created.sessionId, 1);
     assert.equal(notebook.metadata.emrServerless?.sessionId, created.sessionId);
+    assert.deepEqual(emr.deleteSessionCalls, [{ applicationId: 'app-1', sessionId: 1 }]);
+  });
+
+  it('createForNotebook does not delete a Livy session still bound to another notebook', async () => {
+    const emr = new FakeEmrAdapter();
+    const first = createNotebook('file:///shared-a.ipynb');
+    const second = createNotebook('file:///shared-b.ipynb');
+    const workspace = createMemoryWorkspace([first, second]);
+    const connection = new NotebookConnection(emr, new FakeGlueAdapter(), workspace);
+
+    await connection.attach(first, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionId: 1,
+    });
+    await connection.attach(second, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionId: 1,
+    });
+    await connection.createForNotebook(first, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionName: 'next',
+    });
+    assert.deepEqual(emr.deleteSessionCalls, []);
+    assert.equal(second.metadata.emrServerless?.sessionId, 1);
+  });
+
+  it('createForNotebook deletes a metadata-only Glue session before creating a new one', async () => {
+    const glue = new FakeGlueAdapter();
+    const notebook = createNotebook('file:///glue-replace.ipynb', {
+      glueInteractive: { sessionId: 'gs-old' },
+    });
+    const workspace = createMemoryWorkspace([notebook]);
+    const connection = new NotebookConnection(new FakeEmrAdapter(), glue, workspace);
+
+    await connection.createForNotebook(notebook, { backend: 'glue' });
+    assert.deepEqual(glue.deleteSessionCalls, ['gs-old']);
+    assert.notEqual(notebook.metadata.glueInteractive?.sessionId, 'gs-old');
   });
 
   it('serializes concurrent attach calls on the same notebook', async () => {

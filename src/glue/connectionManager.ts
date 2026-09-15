@@ -48,6 +48,12 @@ export class GlueSparkBackend implements GlueSparkBackendAdapter {
     return this.create(params);
   }
 
+  async deleteSession(sessionId: string): Promise<void> {
+    const service = getGlueSessionService();
+    await service.stopSession(sessionId).catch(() => undefined);
+    await service.deleteSession(sessionId);
+  }
+
   async refreshDashboard(session: SparkSessionHandle): Promise<string | undefined> {
     const glue = this.unwrap(session);
     await glue.refreshState().catch(() => undefined);

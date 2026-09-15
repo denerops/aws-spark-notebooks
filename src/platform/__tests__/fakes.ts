@@ -127,8 +127,14 @@ export class FakeEmrAdapter implements EmrSparkBackendAdapter {
     });
   }
 
+  deleteSessionCalls: Array<{ applicationId: string; sessionId: number }> = [];
+
   async createStandalone(params: EmrCreateParams): Promise<SparkSessionHandle> {
     return this.create(params);
+  }
+
+  async deleteSession(applicationId: string, sessionId: number): Promise<void> {
+    this.deleteSessionCalls.push({ applicationId, sessionId });
   }
 
   async refreshDashboard(session: SparkSessionHandle): Promise<string | undefined> {
@@ -186,8 +192,14 @@ export class FakeGlueAdapter implements GlueSparkBackendAdapter {
     });
   }
 
+  deleteSessionCalls: string[] = [];
+
   async createStandalone(params: GlueCreateParams): Promise<SparkSessionHandle> {
     return this.create(params);
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    this.deleteSessionCalls.push(sessionId);
   }
 
   async refreshDashboard(session: SparkSessionHandle): Promise<string | undefined> {

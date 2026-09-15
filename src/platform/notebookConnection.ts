@@ -219,6 +219,7 @@ export class NotebookConnection {
     params: CreateForNotebookParams
   ): Promise<SparkSessionHandle> {
     return this.withLock(notebook, async () => {
+      await this.releasePreviousRemoteSession(notebook);
       const session =
         params.backend === 'emr'
           ? await this.emr.create(params)
@@ -227,6 +228,100 @@ export class NotebookConnection {
       await this.bind(notebook, params.backend, session);
       return session;
     });
+  }
+
+  /** Drop this notebook's previous Livy/Glue session so a replacement does not inherit a dead driver. */
+  private async releasePreviousRemoteSession(notebook: NotebookRef): Promise<void> {
+    const live = this.bindings.get(this.key(notebook));
+    const emrMeta = this.readEmrMeta(notebook);
+    const glueMeta = this.readGlueMeta(notebook);
+    this.bindings.delete(this.key(notebook));
+
+    if (live?.backend === 'emr' && live.session.applicationId) {
+      await this.deleteEmrSessionIfUnshared(
+        notebook,
+        live.session.applicationId,
+        Number(live.session.sessionId)
+      );
+      return;
+    }
+    if (live?.backend === 'glue') {
+      await this.deleteGlueSessionIfUnshared(notebook, String(live.session.sessionId));
+      return;
+    }
+    if (emrMeta.applicationId && emrMeta.sessionId !== undefined) {
+      await this.deleteEmrSessionIfUnshared(
+        notebook,
+        emrMeta.applicationId,
+        emrMeta.sessionId
+      );
+      return;
+    }
+    if (glueMeta.sessionId) {
+      await this.deleteGlueSessionIfUnshared(notebook, glueMeta.sessionId);
+    }
+  }
+
+  private async deleteEmrSessionIfUnshared(
+    notebook: NotebookRef,
+    applicationId: string,
+    sessionId: number
+  ): Promise<void> {
+    if (this.isSharedEmrSession(notebook, applicationId, sessionId)) {
+      return;
+    }
+    await this.emr.deleteSession(applicationId, sessionId).catch(() => undefined);
+  }
+
+  private async deleteGlueSessionIfUnshared(
+    notebook: NotebookRef,
+    sessionId: string
+  ): Promise<void> {
+    if (this.isSharedGlueSession(notebook, sessionId)) {
+      return;
+    }
+    await this.glue.deleteSession(sessionId).catch(() => undefined);
+  }
+
+  private isSharedEmrSession(
+    except: NotebookRef,
+    applicationId: string,
+    sessionId: number
+  ): boolean {
+    for (const notebook of this.workspace.listSparkNotebooks()) {
+      if (this.key(notebook) === this.key(except)) {
+        continue;
+      }
+      const live = this.bindings.get(this.key(notebook));
+      if (
+        live?.backend === 'emr' &&
+        live.session.applicationId === applicationId &&
+        Number(live.session.sessionId) === sessionId
+      ) {
+        return true;
+      }
+      const meta = this.readEmrMeta(notebook);
+      if (meta.applicationId === applicationId && meta.sessionId === sessionId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private isSharedGlueSession(except: NotebookRef, sessionId: string): boolean {
+    for (const notebook of this.workspace.listSparkNotebooks()) {
+      if (this.key(notebook) === this.key(except)) {
+        continue;
+      }
+      const live = this.bindings.get(this.key(notebook));
+      if (live?.backend === 'glue' && String(live.session.sessionId) === sessionId) {
+        return true;
+      }
+      if (this.readGlueMeta(notebook).sessionId === sessionId) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async disconnect(notebook: NotebookRef): Promise<void> {

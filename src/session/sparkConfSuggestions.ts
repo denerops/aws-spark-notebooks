@@ -69,6 +69,11 @@ export const SPARK_CONF_SUGGESTIONS: SparkConfSuggestion[] = [
     description: 'Default catalog for unqualified table names',
   },
   {
+    key: 'spark.eventLog.overwrite',
+    value: 'true',
+    description: 'Overwrite leftover eventlog_v2 dirs when EMR workers are reused',
+  },
+  {
     key: 'spark.sql.adaptive.enabled',
     value: 'true',
     description: 'Adaptive Query Execution (AQE)',

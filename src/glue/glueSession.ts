@@ -84,6 +84,7 @@ export class GlueLivySession {
       summary.description
     );
     await session.waitUntilReady();
+    await session.bootstrap();
     return session;
   }
 
