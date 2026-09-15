@@ -9,14 +9,20 @@ import {
 import {
   DEAD_SESSION_STATES,
   READY_SESSION_STATES,
+  isSessionGoneError,
 } from '../session/sessionState';
 import { LivySigV4Client } from './sigV4Client';
 import type { LivySessionInfo, LivyStatement, StatementKind } from './types';
 import { EMR_DISPLAY_BOOTSTRAP } from './types';
+import {
+  DEFAULT_HEARTBEAT_TIMEOUT_SECONDS,
+  keepAliveIntervalMs,
+} from './keepAlive';
 
 export class LivySession {
   private client: LivySigV4Client;
   private bootstrapped = false;
+  private keepAliveTimer: ReturnType<typeof setInterval> | undefined;
   private _dashboardUrl: string | undefined;
   private _dashboardFetchedAt: number | undefined;
   private _dashboardAnnounced = false;
@@ -93,6 +99,11 @@ export class LivySession {
     );
     await session.waitUntilReady(onProgress);
     await session.bootstrap();
+    const heartbeatTimeout =
+      typeof body.heartbeatTimeoutInSecond === 'number'
+        ? body.heartbeatTimeoutInSecond
+        : DEFAULT_HEARTBEAT_TIMEOUT_SECONDS;
+    session.startKeepAlive(keepAliveIntervalMs(heartbeatTimeout));
     return session;
   }
 
@@ -117,6 +128,7 @@ export class LivySession {
     if (!READY_SESSION_STATES.has(info.state)) {
       await session.waitUntilReady();
     }
+    session.startKeepAlive(keepAliveIntervalMs(DEFAULT_HEARTBEAT_TIMEOUT_SECONDS));
     return session;
   }
 
@@ -128,6 +140,9 @@ export class LivySession {
     }
     if (info.name) {
       this.name = info.name;
+    }
+    if (DEAD_SESSION_STATES.has(this.state)) {
+      this.stopKeepAlive();
     }
     return info;
   }
@@ -194,8 +209,36 @@ export class LivySession {
   }
 
   async stop(): Promise<void> {
+    this.stopKeepAlive();
     await this.client.deleteSession(this.sessionId);
     this.state = 'dead';
+  }
+
+  startKeepAlive(intervalMs: number): void {
+    this.stopKeepAlive();
+    if (intervalMs <= 0) {
+      return;
+    }
+    this.keepAliveTimer = setInterval(() => {
+      void this.heartbeat();
+    }, intervalMs);
+  }
+
+  stopKeepAlive(): void {
+    if (this.keepAliveTimer) {
+      clearInterval(this.keepAliveTimer);
+      this.keepAliveTimer = undefined;
+    }
+  }
+
+  private async heartbeat(): Promise<void> {
+    try {
+      await this.client.sendHeartbeat(this.sessionId);
+    } catch (error) {
+      if (isSessionGoneError(error) || DEAD_SESSION_STATES.has(this.state)) {
+        this.stopKeepAlive();
+      }
+    }
   }
 
   getClient(): LivySigV4Client {
