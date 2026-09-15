@@ -277,6 +277,7 @@ describe('selectKernel shell', () => {
     releaseList();
     assert.equal(await first, false);
     assert.equal(second, false);
+    assert.match(ui.infos[0] ?? '', /already in progress/);
   });
 
   it('surfaces list errors and empty states', async () => {

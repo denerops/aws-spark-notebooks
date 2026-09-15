@@ -2,16 +2,27 @@ import {
   getSessionStartupTimeoutSeconds,
   getStatementPollIntervalMs,
 } from '../aws/config';
+import {
+  diagnoseLivyStartupFailure,
+  SessionStartupFailureError,
+} from '../session/diagnoseStartupFailure';
+import {
+  DEAD_SESSION_STATES,
+  READY_SESSION_STATES,
+  isSessionGoneError,
+} from '../session/sessionState';
 import { LivySigV4Client } from './sigV4Client';
 import type { LivySessionInfo, LivyStatement, StatementKind } from './types';
 import { EMR_DISPLAY_BOOTSTRAP } from './types';
-
-const READY_STATES = new Set(['idle', 'busy']);
-const DEAD_STATES = new Set(['dead', 'error', 'killed', 'shutting_down']);
+import {
+  DEFAULT_HEARTBEAT_TIMEOUT_SECONDS,
+  keepAliveIntervalMs,
+} from './keepAlive';
 
 export class LivySession {
   private client: LivySigV4Client;
   private bootstrapped = false;
+  private keepAliveTimer: ReturnType<typeof setInterval> | undefined;
   private _dashboardUrl: string | undefined;
   private _dashboardFetchedAt: number | undefined;
   private _dashboardAnnounced = false;
@@ -29,7 +40,7 @@ export class LivySession {
   }
 
   get isReady(): boolean {
-    return READY_STATES.has(this.state);
+    return READY_SESSION_STATES.has(this.state);
   }
 
   get dashboardUrl(): string | undefined {
@@ -88,6 +99,11 @@ export class LivySession {
     );
     await session.waitUntilReady(onProgress);
     await session.bootstrap();
+    const heartbeatTimeout =
+      typeof body.heartbeatTimeoutInSecond === 'number'
+        ? body.heartbeatTimeoutInSecond
+        : DEFAULT_HEARTBEAT_TIMEOUT_SECONDS;
+    session.startKeepAlive(keepAliveIntervalMs(heartbeatTimeout));
     return session;
   }
 
@@ -98,8 +114,8 @@ export class LivySession {
   ): Promise<LivySession> {
     const client = new LivySigV4Client(applicationId, region);
     const info = await client.getSession(sessionId);
-    if (DEAD_STATES.has(info.state)) {
-      throw new Error(`Session ${sessionId} is not active (state: ${info.state})`);
+    if (DEAD_SESSION_STATES.has(info.state)) {
+      throw await errorForDeadLivySession(client, info);
     }
     const session = new LivySession(
       applicationId,
@@ -109,9 +125,10 @@ export class LivySession {
       info.appId,
       info.name
     );
-    if (!READY_STATES.has(info.state)) {
+    if (!READY_SESSION_STATES.has(info.state)) {
       await session.waitUntilReady();
     }
+    session.startKeepAlive(keepAliveIntervalMs(DEFAULT_HEARTBEAT_TIMEOUT_SECONDS));
     return session;
   }
 
@@ -124,6 +141,9 @@ export class LivySession {
     if (info.name) {
       this.name = info.name;
     }
+    if (DEAD_SESSION_STATES.has(this.state)) {
+      this.stopKeepAlive();
+    }
     return info;
   }
 
@@ -134,11 +154,11 @@ export class LivySession {
     while (Date.now() - started < timeoutMs) {
       const info = await this.refreshState();
       onProgress?.(info);
-      if (READY_STATES.has(info.state)) {
+      if (READY_SESSION_STATES.has(info.state)) {
         return;
       }
-      if (DEAD_STATES.has(info.state)) {
-        throw new Error(`Session failed to start (state: ${info.state})`);
+      if (DEAD_SESSION_STATES.has(info.state)) {
+        throw await errorForDeadLivySession(this.client, info);
       }
       await sleep(2000);
     }
@@ -163,6 +183,10 @@ export class LivySession {
       onStatement?: (stmt: LivyStatement) => void;
     }
   ): Promise<LivyStatement> {
+    if (!options?.skipDisplayWrap && !this.bootstrapped) {
+      await this.bootstrap();
+    }
+
     const submitted = await this.client.submitStatement(this.sessionId, code, kind);
     const pollInterval = getStatementPollIntervalMs();
 
@@ -185,13 +209,70 @@ export class LivySession {
   }
 
   async stop(): Promise<void> {
+    this.stopKeepAlive();
     await this.client.deleteSession(this.sessionId);
     this.state = 'dead';
+  }
+
+  startKeepAlive(intervalMs: number): void {
+    this.stopKeepAlive();
+    if (intervalMs <= 0) {
+      return;
+    }
+    this.keepAliveTimer = setInterval(() => {
+      void this.heartbeat();
+    }, intervalMs);
+  }
+
+  stopKeepAlive(): void {
+    if (this.keepAliveTimer) {
+      clearInterval(this.keepAliveTimer);
+      this.keepAliveTimer = undefined;
+    }
+  }
+
+  private async heartbeat(): Promise<void> {
+    try {
+      await this.client.sendHeartbeat(this.sessionId);
+    } catch (error) {
+      if (isSessionGoneError(error) || DEAD_SESSION_STATES.has(this.state)) {
+        this.stopKeepAlive();
+      }
+    }
   }
 
   getClient(): LivySigV4Client {
     return this.client;
   }
+}
+
+async function errorForDeadLivySession(
+  client: LivySigV4Client,
+  info: LivySessionInfo
+): Promise<SessionStartupFailureError> {
+  let logLines = info.log ?? [];
+  const first = diagnoseLivyStartupFailure({
+    state: info.state,
+    logLines,
+    sessionId: info.id,
+  });
+  if (first.category === 'unknown' || logLines.length === 0) {
+    try {
+      const extra = await client.getSessionLog(info.id);
+      if (extra.length > 0) {
+        logLines = extra;
+      }
+    } catch {
+      // Livy log endpoint is optional; keep whatever GET /sessions returned.
+    }
+  }
+  return new SessionStartupFailureError(
+    diagnoseLivyStartupFailure({
+      state: info.state,
+      logLines,
+      sessionId: info.id,
+    })
+  );
 }
 
 function sleep(ms: number): Promise<void> {

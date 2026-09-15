@@ -154,6 +154,12 @@
         "category": "EMR Serverless"
       },
       {
+        "command": "emrServerless.viewSessionLogs",
+        "title": "View Startup Logs",
+        "icon": "$(output)",
+        "category": "EMR Serverless"
+      },
+      {
         "command": "emrServerless.newSession",
         "title": "New Session",
         "icon": "$(add)",
@@ -440,8 +446,13 @@
         },
         {
           "command": "emrServerless.stopSession",
-          "when": "view == emrServerlessApplications && (viewItem == session || viewItem == sessionStarting)",
+          "when": "view == emrServerlessApplications && (viewItem == session || viewItem == sessionStarting || viewItem == sessionDead)",
           "group": "2_destructive@1"
+        },
+        {
+          "command": "emrServerless.viewSessionLogs",
+          "when": "view == emrServerlessApplications && viewItem == sessionDead",
+          "group": "1_actions@1"
         },
         {
           "command": "emrServerless.newSession",
@@ -460,7 +471,7 @@
         },
         {
           "command": "glueInteractive.deleteSession",
-          "when": "view == glueInteractiveSessions && (viewItem == sessionReady || viewItem == sessionProvisioning || viewItem == session || viewItem == sessionStopped)",
+          "when": "view == glueInteractiveSessions && (viewItem == sessionReady || viewItem == sessionProvisioning || viewItem == session || viewItem == sessionStopped || viewItem == sessionFailed)",
           "group": "2_destructive@2"
         }
       ]

@@ -1,3 +1,5 @@
+import { sparkRuntimeHint } from '../notebook/sparkCellHints';
+
 export function sanitizeErrorMessage(raw: string): string {
   const lines = raw.split('\n');
   const messageLines: string[] = [];
@@ -18,8 +20,11 @@ export function sanitizeErrorMessage(raw: string): string {
 }
 
 export function extractErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return sanitizeErrorMessage(error.message);
+  const raw = error instanceof Error ? error.message : String(error);
+  const sanitized = sanitizeErrorMessage(raw);
+  const hint = sparkRuntimeHint(sanitized) ?? sparkRuntimeHint(raw);
+  if (!hint) {
+    return sanitized;
   }
-  return sanitizeErrorMessage(String(error));
+  return `${hint}\n\n${sanitized}`;
 }

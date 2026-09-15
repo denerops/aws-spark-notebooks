@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
-import type { LivyApplication } from '../aws/emrServerlessClient';
-import { formatAwsAuthError } from '../aws/credentials';
-import type { EmrSparkBackend } from '../emr/connectionManager';
 import { formatLivySessionLabel, type LivySessionInfo } from '../livy/types';
+import type { SessionStartupFailure } from '../session/diagnoseStartupFailure';
+import { STARTING_SESSION_STATES } from '../session/sessionState';
+import type { EmrSessionCatalog } from '../platform/sessionCatalog';
+import type { LivyApplication } from '../aws/emrServerlessClient';
 
 export const APPLICATIONS_VIEW_ID = 'emrServerlessApplications';
 
@@ -15,6 +16,7 @@ export type AppTreeNodeKind =
   | 'applicationRunning'
   | 'session'
   | 'sessionStarting'
+  | 'sessionDead'
   | 'loading'
   | 'error'
   | 'empty';
@@ -62,6 +64,8 @@ function iconForKind(kind: AppTreeNodeKind): vscode.ThemeIcon {
       return new vscode.ThemeIcon('debug-disconnect');
     case 'session':
       return new vscode.ThemeIcon('symbol-method');
+    case 'sessionDead':
+      return new vscode.ThemeIcon('error');
     case 'loading':
       return new vscode.ThemeIcon('loading~spin');
     case 'error':
@@ -88,97 +92,59 @@ function kindForApplicationState(state: string): AppTreeNodeKind {
   }
 }
 
-const SESSION_STARTING_STATES = new Set(['not_started', 'starting', 'recovering']);
+const SESSION_DEAD_STATES = new Set(['dead', 'error', 'killed', 'shutting_down']);
 
 function kindForSessionState(state: string): AppTreeNodeKind {
-  return SESSION_STARTING_STATES.has(state) ? 'sessionStarting' : 'session';
+  if (STARTING_SESSION_STATES.has(state)) {
+    return 'sessionStarting';
+  }
+  if (SESSION_DEAD_STATES.has(state)) {
+    return 'sessionDead';
+  }
+  return 'session';
 }
 
 export class ApplicationsTreeProvider implements vscode.TreeDataProvider<ApplicationsTreeItem> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<ApplicationsTreeItem | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private applications: LivyApplication[] = [];
-  private sessionsByApp = new Map<string, LivySessionInfo[]>();
-  /** Apps with a session create in flight before Livy returns a session id. */
-  private readonly pendingSessionCreate = new Map<string, string | undefined>();
-  private region = '';
-  private loadError: string | undefined;
-  private loading = false;
-
-  constructor(private readonly emrBackend: EmrSparkBackend) {}
+  constructor(private readonly catalog: EmrSessionCatalog) {
+    catalog.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
+  }
 
   refresh(): void {
-    void this.loadApplications();
-    this._onDidChangeTreeData.fire(undefined);
+    void this.catalog.refresh();
   }
 
-  /** Optimistically update a single app's state in the sidebar (e.g. STARTING / STOPPING). */
   patchApplicationState(applicationId: string, state: string): void {
-    const index = this.applications.findIndex((app) => app.id === applicationId);
-    if (index < 0) {
-      return;
-    }
-    this.applications[index] = { ...this.applications[index], state };
-    if (state !== 'STARTED') {
-      this.sessionsByApp.delete(applicationId);
-    }
-    this._onDidChangeTreeData.fire(undefined);
+    this.catalog.patchApplicationState(applicationId, state);
   }
 
-  /** Show a "Creating session…" row under the app until Livy assigns a session id. */
   markSessionCreating(applicationId: string, sessionName?: string): void {
-    this.pendingSessionCreate.set(applicationId, sessionName);
-    this._onDidChangeTreeData.fire(undefined);
+    this.catalog.markSessionCreating(applicationId, sessionName);
   }
 
-  /** Insert or update a session row as creation progresses (starting → idle). */
   upsertSession(applicationId: string, session: LivySessionInfo): void {
-    this.pendingSessionCreate.delete(applicationId);
-    const existing = this.sessionsByApp.get(applicationId) ?? [];
-    const index = existing.findIndex((s) => s.id === session.id);
-    const next = [...existing];
-    if (index >= 0) {
-      next[index] = { ...next[index], ...session };
-    } else {
-      next.push(session);
-    }
-    this.sessionsByApp.set(applicationId, next);
-    this._onDidChangeTreeData.fire(undefined);
+    this.catalog.upsertSession(applicationId, session);
+  }
+
+  recordStartupFailure(applicationId: string, failure: SessionStartupFailure): void {
+    this.catalog.recordStartupFailure(applicationId, failure);
+  }
+
+  getSessionFailure(
+    applicationId: string,
+    sessionId: number
+  ): SessionStartupFailure | undefined {
+    return this.catalog.getSessionFailure(applicationId, sessionId);
   }
 
   clearSessionCreating(applicationId: string): void {
-    this.pendingSessionCreate.delete(applicationId);
-    this._onDidChangeTreeData.fire(undefined);
+    this.catalog.clearSessionCreating(applicationId);
   }
 
   async loadApplications(): Promise<void> {
-    this.loading = true;
-    this.loadError = undefined;
-    try {
-      const { region, applications } = await this.emrBackend.listApplications();
-      this.region = region;
-      this.applications = applications;
-      this.sessionsByApp.clear();
-      // Keep pendingSessionCreate — an in-flight create should still show in the tree.
-
-      for (const app of this.applications) {
-        if (app.state === 'STARTED') {
-          try {
-            const sessions = await this.emrBackend.listSessions(app.id);
-            this.sessionsByApp.set(app.id, sessions);
-          } catch {
-            this.sessionsByApp.set(app.id, []);
-          }
-        }
-      }
-    } catch (error) {
-      this.loadError = formatAwsAuthError(error);
-      this.applications = [];
-    } finally {
-      this.loading = false;
-      this._onDidChangeTreeData.fire(undefined);
-    }
+    await this.catalog.refresh();
   }
 
   getTreeItem(element: ApplicationsTreeItem): vscode.TreeItem {
@@ -186,53 +152,55 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
   }
 
   async getChildren(element?: ApplicationsTreeItem): Promise<ApplicationsTreeItem[]> {
+    const region = this.catalog.region;
+    const applications = this.catalog.applications;
+    const loadError = this.catalog.loadError;
+    const loading = this.catalog.loading;
+
     if (!element) {
-      if (this.loading && this.applications.length === 0 && !this.loadError) {
+      if (loading && applications.length === 0 && !loadError) {
         return [
           new ApplicationsTreeItem(
             'loading',
-            { region: this.region },
+            { region },
             'Loading applications…',
             vscode.TreeItemCollapsibleState.None
           ),
         ];
       }
 
-      if (this.loadError) {
+      if (loadError) {
         return [
           new ApplicationsTreeItem(
             'error',
-            { region: this.region },
+            { region },
             'Failed to load',
             vscode.TreeItemCollapsibleState.None,
-            { description: this.loadError, tooltip: this.loadError }
+            { description: loadError, tooltip: loadError }
           ),
         ];
       }
 
-      if (this.applications.length === 0) {
+      if (applications.length === 0) {
         return [
           new ApplicationsTreeItem(
             'empty',
-            { region: this.region },
+            { region },
             'No Livy-enabled applications',
             vscode.TreeItemCollapsibleState.None,
-            { description: this.region }
+            { description: region }
           ),
         ];
       }
 
-      return this.applications.map((app) => {
+      return applications.map((app) => {
         const kind = kindForApplicationState(app.state);
         const running = kind === 'applicationRunning';
-        const sessionCount = this.sessionsByApp.get(app.id)?.length ?? 0;
-        const description =
-          running
-            ? `${app.state} · ${sessionCount} session(s)`
-            : app.state;
+        const sessionCount = this.catalog.sessionsFor(app.id).length;
+        const description = running ? `${app.state} · ${sessionCount} session(s)` : app.state;
         return new ApplicationsTreeItem(
           kind,
-          { applicationId: app.id, applicationName: app.name, region: this.region },
+          { applicationId: app.id, applicationName: app.name, region },
           app.name,
           running
             ? vscode.TreeItemCollapsibleState.Collapsed
@@ -249,13 +217,14 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
       return [];
     }
 
-    if (
-      element.kind === 'applicationRunning' &&
-      element.context.applicationId
-    ) {
-      const sessions = this.sessionsByApp.get(element.context.applicationId) ?? [];
+    if (element.kind === 'applicationRunning' && element.context.applicationId) {
+      const sessions = this.catalog.sessionsFor(element.context.applicationId);
       const items: ApplicationsTreeItem[] = sessions.map((session) => {
         const kind = kindForSessionState(session.state);
+        const failure = this.catalog.getSessionFailure(
+          element.context.applicationId!,
+          session.id
+        );
         return new ApplicationsTreeItem(
           kind,
           {
@@ -263,20 +232,20 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
             applicationName: element.context.applicationName,
             sessionId: session.id,
             sessionState: session.state,
-            region: this.region,
+            region,
           },
           formatLivySessionLabel(session),
           vscode.TreeItemCollapsibleState.None,
           {
             description: `${session.state} · ${session.kind ?? 'pyspark'}`,
-            tooltip: `Session ${session.id}${session.name ? `\nName: ${session.name}` : ''}\nOwner: ${session.owner ?? 'unknown'}`,
+            tooltip: formatSessionTooltip(session, failure),
           }
         );
       });
 
-      const appId = element.context.applicationId!;
-      if (this.pendingSessionCreate.has(appId)) {
-        const pendingName = this.pendingSessionCreate.get(appId);
+      const appId = element.context.applicationId;
+      if (this.catalog.pendingSessionCreate.has(appId)) {
+        const pendingName = this.catalog.pendingSessionCreate.get(appId);
         const label = pendingName?.trim()
           ? `Creating "${pendingName}"…`
           : 'Creating session…';
@@ -289,7 +258,7 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
             { description: 'starting' }
           )
         );
-      } else if (!this.emrBackend.isCreatingSession(appId)) {
+      } else if (!this.catalog.isCreatingSession(appId)) {
         items.push(
           new ApplicationsTreeItem(
             'empty',
@@ -314,21 +283,44 @@ export class ApplicationsTreeProvider implements vscode.TreeDataProvider<Applica
   }
 
   getApplication(applicationId: string): LivyApplication | undefined {
-    return this.applications.find((a) => a.id === applicationId);
+    return this.catalog.getApplication(applicationId);
   }
+}
+
+function formatSessionTooltip(
+  session: LivySessionInfo,
+  failure?: SessionStartupFailure
+): string {
+  return [
+    `Session ${session.id}`,
+    session.name ? `Name: ${session.name}` : undefined,
+    `Owner: ${session.owner ?? 'unknown'}`,
+    `State: ${session.state}`,
+    failure?.summary,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 export function registerApplicationsTree(
   context: vscode.ExtensionContext,
-  emrBackend: EmrSparkBackend
+  catalog: EmrSessionCatalog
 ): ApplicationsTreeProvider {
-  const provider = new ApplicationsTreeProvider(emrBackend);
+  const provider = new ApplicationsTreeProvider(catalog);
 
+  const view = vscode.window.createTreeView(APPLICATIONS_VIEW_ID, {
+    treeDataProvider: provider,
+  });
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider(APPLICATIONS_VIEW_ID, provider)
+    view,
+    { dispose: () => catalog.dispose() },
+    view.onDidChangeVisibility((event) => catalog.setViewVisible(event.visible))
   );
+  if (view.visible) {
+    catalog.setViewVisible(true);
+  }
 
-  void provider.loadApplications();
+  void catalog.refresh();
 
   return provider;
 }

@@ -12,6 +12,7 @@ import { registerGluePresetsActions } from './browser/gluePresetsActions';
 import { EmrSparkBackend } from './emr/connectionManager';
 import { GlueSparkBackend } from './glue/connectionManager';
 import { NotebookConnection } from './platform/notebookConnection';
+import { EmrSessionCatalog, GlueSessionCatalog } from './platform/sessionCatalog';
 import { vscodeNotebookWorkspace } from './platform/vscodeNotebookWorkspace';
 import { registerKernelManager, type EmrKernelManager } from './notebook/kernelManager';
 import { registerSerializer } from './notebook/serializer';
@@ -22,7 +23,7 @@ import { promptSparkConnection } from './ui/connectWizard';
 import { applyAwsProfileChange, promptAwsProfileSelection } from './aws/profile';
 import { runAwsDiagnostics } from './aws/diagnostics';
 import { applyAwsRegionChange, promptAwsRegionSelection, syncRegionFromProfile } from './aws/region';
-import { initializeAwsContext, refreshAwsTransportContext } from './aws/credentials';
+import { initializeAwsContext, refreshAwsTransportContext, formatAwsAuthError } from './aws/credentials';
 import { resetProxyConfig } from './aws/proxyConfig';
 import { resetEmrServerlessService } from './aws/emrServerlessClient';
 import { resetGlueSessionService } from './glue/glueSessionService';
@@ -36,6 +37,8 @@ let configTree: ReturnType<typeof registerConfigTree>;
 let applicationsTree: ReturnType<typeof registerApplicationsTree>;
 let glueSessionsTree: ReturnType<typeof registerGlueSessionsTree>;
 let kernelManager: EmrKernelManager;
+let emrCatalog: EmrSessionCatalog;
+let glueCatalog: GlueSessionCatalog;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   await initializeAwsContext();
@@ -43,6 +46,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const emrBackend = new EmrSparkBackend();
   const glueBackend = new GlueSparkBackend();
   connection = new NotebookConnection(emrBackend, glueBackend, vscodeNotebookWorkspace);
+  emrCatalog = new EmrSessionCatalog(emrBackend, { formatError: formatAwsAuthError });
+  glueCatalog = new GlueSessionCatalog(glueBackend, { formatError: formatAwsAuthError });
 
   statusBar = new ConnectionStatusBar(connection);
   const emrPresetStore = getSessionPresetStore(context);
@@ -56,10 +61,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     emrBackend,
     glueBackend,
     emrPresetStore,
-    gluePresetStore
+    gluePresetStore,
+    { emr: emrCatalog, glue: glueCatalog }
   );
-  applicationsTree = registerApplicationsTree(context, emrBackend);
-  glueSessionsTree = registerGlueSessionsTree(context, glueBackend);
+  applicationsTree = registerApplicationsTree(context, emrCatalog);
+  glueSessionsTree = registerGlueSessionsTree(context, glueCatalog);
   registerApplicationsActions(context, emrBackend, applicationsTree, kernelManager, connection);
   registerGlueSessionsActions(context, glueBackend, glueSessionsTree, kernelManager, connection);
   registerSessionPresetsActions(context, emrPresetStore, configTree);
@@ -68,8 +74,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(statusBar);
 
-  const refreshSidebar = (notebook?: vscode.NotebookDocument): void => {
+  const refreshConnectionUi = (notebook?: vscode.NotebookDocument): void => {
+    if (notebook && isEmrSparkNotebook(notebook)) {
+      kernelManager.updateKernelAppearance(notebook);
+    }
     statusBar.update(notebook);
+  };
+
+  const refreshSessionViews = (): void => {
+    applicationsTree.refresh();
+    glueSessionsTree.refresh();
   };
 
   const refreshAfterAwsContextChange = async (reason: 'profile' | 'region' | 'both'): Promise<void> => {
@@ -91,9 +105,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }
     await configTree.refreshAwsContext();
-    refreshSidebar();
-    applicationsTree.refresh();
-    glueSessionsTree.refresh();
+    refreshConnectionUi();
+    refreshSessionViews();
   };
 
   context.subscriptions.push(
@@ -145,7 +158,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand('emrServerless.refreshSidebarState', () => {
-      refreshSidebar();
+      refreshConnectionUi();
     })
   );
 
@@ -202,9 +215,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       await kernelManager.promptKernelSelection(notebook);
-      refreshSidebar(notebook);
-      applicationsTree.refresh();
-      glueSessionsTree.refresh();
+      refreshConnectionUi(notebook);
+      refreshSessionViews();
     })
   );
 
@@ -219,18 +231,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         gluePresetStore,
         notebook && isEmrSparkNotebook(notebook) ? notebook : undefined,
         (nb) => {
-          kernelManager.updateKernelAppearance(nb);
-          refreshSidebar(nb);
-          applicationsTree.refresh();
-          glueSessionsTree.refresh();
+          refreshConnectionUi(nb);
+          refreshSessionViews();
           notifyDashboardAvailable(nb);
-        }
+        },
+        { emr: emrCatalog, glue: glueCatalog }
       );
       if (connected && notebook && isEmrSparkNotebook(notebook)) {
-        kernelManager.updateKernelAppearance(notebook);
-        refreshSidebar(notebook);
-        applicationsTree.refresh();
-        glueSessionsTree.refresh();
+        refreshConnectionUi(notebook);
+        refreshSessionViews();
         notifyDashboardAvailable(notebook);
       }
     })
@@ -243,7 +252,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await connection.disconnect(notebook);
         kernelManager.updateKernelAppearance(notebook);
       }
-      refreshSidebar();
+      refreshConnectionUi();
     })
   );
 
@@ -253,15 +262,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       connection.release(notebook);
-      refreshSidebar();
-      applicationsTree.refresh();
-      glueSessionsTree.refresh();
+      refreshConnectionUi();
     })
   );
 
   context.subscriptions.push(
     vscode.window.onDidChangeActiveNotebookEditor((editor) => {
-      refreshSidebar(editor?.notebook);
+      refreshConnectionUi(editor?.notebook);
       if (editor && isEmrSparkNotebook(editor.notebook)) {
         kernelManager.updateKernelAppearance(editor.notebook);
       }

@@ -24,6 +24,7 @@ export interface GlueSessionSummary {
   id: string;
   description?: string;
   status: GlueSessionStatus;
+  errorMessage?: string;
   role?: string;
   glueVersion?: string;
   workerType?: string;
@@ -129,6 +130,7 @@ export function mapGlueSession(session: {
   Id?: string;
   Description?: string;
   Status?: string;
+  ErrorMessage?: string;
   Role?: string;
   GlueVersion?: string;
   WorkerType?: string;
@@ -141,6 +143,7 @@ export function mapGlueSession(session: {
     id: session.Id ?? '',
     description: session.Description,
     status: session.Status ?? 'UNKNOWN',
+    errorMessage: session.ErrorMessage,
     role: session.Role,
     glueVersion: session.GlueVersion,
     workerType: session.WorkerType,

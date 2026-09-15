@@ -6,7 +6,9 @@ import type {
   GlueSparkBackendAdapter,
   SparkBackend,
 } from '../platform/sparkBackend';
+import type { EmrSessionCatalog, GlueSessionCatalog } from '../platform/sessionCatalog';
 import type { SessionPresetStore } from '../session/presets';
+import { isSessionGoneError } from '../session/sessionState';
 import { createKernelSelectionSteps } from '../ui/createKernelSelectionSteps';
 import { selectKernel } from '../ui/selectKernel';
 import { SparknbController } from './controller';
@@ -22,7 +24,8 @@ export class EmrKernelManager implements vscode.Disposable {
     private readonly glue: GlueSparkBackendAdapter,
     private readonly emrPresetStore: SessionPresetStore,
     private readonly gluePresetStore: GlueSessionPresetStore,
-    private readonly context: vscode.ExtensionContext
+    private readonly context: vscode.ExtensionContext,
+    private readonly catalogs?: { emr?: EmrSessionCatalog; glue?: GlueSessionCatalog }
   ) {
     this.sparkController = new SparknbController(connection);
 
@@ -39,6 +42,9 @@ export class EmrKernelManager implements vscode.Disposable {
     context.subscriptions.push(
       this.mainController,
       this.sparkController,
+      connection.onDidChangeConnection((notebook) => {
+        this.updateKernelAppearance(notebook as vscode.NotebookDocument);
+      }),
       vscode.workspace.onDidOpenNotebookDocument((notebook) => {
         if (!isEmrSparkNotebook(notebook)) {
           return;
@@ -63,11 +69,11 @@ export class EmrKernelManager implements vscode.Disposable {
     notebook: vscode.NotebookDocument,
     backend?: SparkBackend
   ): Promise<boolean> {
-    if (!backend && this.connection.isConnected(notebook)) {
-      return true;
+    if (backend) {
+      return this.promptKernelSelection(notebook, backend);
     }
 
-    if (!backend && this.connection.hasSessionBinding(notebook)) {
+    if (this.connection.hasSessionBinding(notebook)) {
       try {
         await vscode.window.withProgress(
           {
@@ -78,8 +84,10 @@ export class EmrKernelManager implements vscode.Disposable {
         );
         this.updateKernelAppearance(notebook);
         return true;
-      } catch {
-        // Stale binding/metadata or dead session — fall through to picker.
+      } catch (error) {
+        if (!isSessionGoneError(error) && this.connection.hasSessionBinding(notebook)) {
+          return true;
+        }
       }
     }
 
@@ -94,18 +102,12 @@ export class EmrKernelManager implements vscode.Disposable {
       this.emr,
       this.glue,
       this.emrPresetStore,
-      this.gluePresetStore
+      this.gluePresetStore,
+      { catalogs: this.catalogs }
     );
     const connected = await selectKernel(this.connection, steps, notebook, { backend });
 
-    if (connected) {
-      this.updateKernelAppearance(notebook);
-      void vscode.commands.executeCommand('emrServerless.refreshApplications');
-      void vscode.commands.executeCommand('glueInteractive.refreshSessions');
-      void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
-    } else {
-      this.updateKernelAppearance(notebook);
-    }
+    this.updateKernelAppearance(notebook);
     return connected;
   }
 
@@ -152,7 +154,8 @@ export function registerKernelManager(
   emr: EmrSparkBackendAdapter,
   glue: GlueSparkBackendAdapter,
   emrPresetStore: SessionPresetStore,
-  gluePresetStore: GlueSessionPresetStore
+  gluePresetStore: GlueSessionPresetStore,
+  catalogs?: { emr?: EmrSessionCatalog; glue?: GlueSessionCatalog }
 ): EmrKernelManager {
   const manager = new EmrKernelManager(
     connection,
@@ -160,7 +163,8 @@ export function registerKernelManager(
     glue,
     emrPresetStore,
     gluePresetStore,
-    context
+    context,
+    catalogs
   );
   context.subscriptions.push(manager);
   return manager;

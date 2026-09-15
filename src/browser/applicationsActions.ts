@@ -3,70 +3,24 @@ import { getEmrServerlessService } from '../aws/emrServerlessClient';
 import type { EmrSparkBackend } from '../emr/connectionManager';
 import type { NotebookConnection } from '../platform/notebookConnection';
 import { createBlankSparknbDocument, createStarterSparknbDocument } from '../notebook/defaultDocument';
-import { LivySession } from '../livy/session';
+import { LivySigV4Client } from '../livy/sigV4Client';
+import { getDefaultRegion } from '../aws/credentials';
 import { getSessionPresetStore } from '../session/presets';
+import { diagnoseLivyStartupFailure, SessionStartupFailureError } from '../session/diagnoseStartupFailure';
 import { pickSessionPreset } from '../ui/pickSessionPreset';
 import { promptSessionName } from '../ui/promptSessionName';
+import { reportSessionStartupFailure, showSessionStartupLogs } from '../ui/sessionStartupError';
 import { openEmrSparkNotebook } from '../notebook/openNotebook';
-import { isEmrSparkNotebook } from '../notebook/types';
 import {
   ApplicationsTreeItem,
   type ApplicationsTreeProvider,
 } from './applicationsTreeProvider';
+import {
+  findOpenSparknb,
+  getActiveSparknb,
+  resolveNotebookForAttach,
+} from './attachNotebook';
 import type { EmrKernelManager } from '../notebook/kernelManager';
-
-function getActiveSparknb(): vscode.NotebookDocument | undefined {
-  const editor = vscode.window.activeNotebookEditor;
-  if (editor && isEmrSparkNotebook(editor.notebook)) {
-    return editor.notebook;
-  }
-  return undefined;
-}
-
-function findOpenSparknb(): vscode.NotebookDocument | undefined {
-  const active = getActiveSparknb();
-  if (active) {
-    return active;
-  }
-  return vscode.workspace.notebookDocuments.find((nb) => isEmrSparkNotebook(nb));
-}
-
-async function resolveNotebookForAttach(
-  applicationId: string,
-  sessionId: number
-): Promise<vscode.NotebookDocument> {
-  const active = getActiveSparknb();
-  if (active) {
-    return active;
-  }
-
-  const existing = vscode.workspace.notebookDocuments.find(
-    (nb) =>
-      isEmrSparkNotebook(nb) &&
-      (nb.metadata?.emrServerless as { applicationId?: string; sessionId?: number } | undefined)
-        ?.applicationId === applicationId &&
-      (nb.metadata?.emrServerless as { sessionId?: number } | undefined)?.sessionId === sessionId
-  );
-
-  if (existing) {
-    await vscode.window.showNotebookDocument(existing);
-    return existing;
-  }
-
-  const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
-  const target = folder
-    ? vscode.Uri.joinPath(folder, `spark-${Date.now()}.ipynb`)
-    : vscode.Uri.parse(`untitled:spark-${Date.now()}.ipynb`);
-
-  const doc = createBlankSparknbDocument();
-  const bytes = new TextEncoder().encode(JSON.stringify(doc, null, 2));
-  await vscode.workspace.fs.writeFile(target, bytes);
-  const notebook = await openEmrSparkNotebook(target);
-  if (!notebook) {
-    throw new Error(`Failed to open notebook: ${target.fsPath}`);
-  }
-  return notebook;
-}
 
 export function registerApplicationsActions(
   context: vscode.ExtensionContext,
@@ -105,6 +59,7 @@ export function registerApplicationsActions(
           kind?: string;
           owner?: string;
           appId?: string;
+          log?: string[];
         }
       ) => {
         if (!applicationId || !info) {
@@ -117,6 +72,7 @@ export function registerApplicationsActions(
           kind: info.kind ?? 'pyspark',
           owner: info.owner,
           appId: info.appId,
+          log: info.log,
         });
       }
     )
@@ -255,7 +211,33 @@ export function registerApplicationsActions(
           return;
         }
         try {
-          const notebook = await resolveNotebookForAttach(appId, sessionId);
+          const notebook = await resolveNotebookForAttach({
+            connection,
+            sessionLabel: `session ${sessionId}`,
+            isThisSession: (nb) => {
+              const meta = nb.metadata?.emrServerless as
+                | { applicationId?: string; sessionId?: number }
+                | undefined;
+              return meta?.applicationId === appId && meta?.sessionId === sessionId;
+            },
+            createNotebook: async () => {
+              const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+              const target = folder
+                ? vscode.Uri.joinPath(folder, `spark-${Date.now()}.ipynb`)
+                : vscode.Uri.parse(`untitled:spark-${Date.now()}.ipynb`);
+              const doc = createBlankSparknbDocument();
+              const bytes = new TextEncoder().encode(JSON.stringify(doc, null, 2));
+              await vscode.workspace.fs.writeFile(target, bytes);
+              const created = await openEmrSparkNotebook(target);
+              if (!created) {
+                throw new Error(`Failed to open notebook: ${target.fsPath}`);
+              }
+              return created;
+            },
+          });
+          if (!notebook) {
+            return;
+          }
           await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
@@ -273,8 +255,7 @@ export function registerApplicationsActions(
           void vscode.commands.executeCommand('emrServerless.refreshApplications');
           void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          vscode.window.showErrorMessage(message);
+          await reportSessionStartupFailure(error);
         }
       }
     )
@@ -299,12 +280,8 @@ export function registerApplicationsActions(
         }
         try {
           const region = item.context.region!;
-          try {
-            const session = await LivySession.attach(appId, region, sessionId);
-            await session.stop();
-          } catch {
-            // Session may already be stopped.
-          }
+          const client = new LivySigV4Client(appId, region);
+          await client.deleteSession(sessionId);
 
           const notebooks = await connection.detachForEmrSession(appId, sessionId);
           for (const notebook of notebooks) {
@@ -318,6 +295,42 @@ export function registerApplicationsActions(
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(message);
         }
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'emrServerless.viewSessionLogs',
+      async (item?: ApplicationsTreeItem) => {
+        const appId = item?.context.applicationId;
+        const sessionId = item?.context.sessionId;
+        if (!appId || sessionId === undefined) {
+          return;
+        }
+
+        let failure = tree.getSessionFailure(appId, sessionId);
+        if (!failure || failure.logLines.length === 0) {
+          try {
+            const region = item.context.region ?? (await getDefaultRegion());
+            const client = new LivySigV4Client(appId, region);
+            const [info, logLines] = await Promise.all([
+              client.getSession(sessionId),
+              client.getSessionLog(sessionId).catch(() => [] as string[]),
+            ]);
+            failure = diagnoseLivyStartupFailure({
+              state: info.state,
+              logLines: logLines.length > 0 ? logLines : info.log,
+              sessionId,
+            });
+            tree.recordStartupFailure(appId, failure);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Could not load session logs: ${message}`);
+            return;
+          }
+        }
+        showSessionStartupLogs(failure);
       }
     )
   );
@@ -386,6 +399,7 @@ export function registerApplicationsActions(
             kind?: string;
             owner?: string;
             appId?: string;
+            log?: string[];
           }) => {
             tree.upsertSession(appId, {
               id: info.id,
@@ -394,6 +408,7 @@ export function registerApplicationsActions(
               kind: info.kind ?? 'pyspark',
               owner: info.owner,
               appId: info.appId,
+              log: info.log,
             });
           };
 
@@ -441,13 +456,11 @@ export function registerApplicationsActions(
           tree.refresh();
         } catch (error) {
           tree.clearSessionCreating(appId);
-          tree.refresh();
-          const message = error instanceof Error ? error.message : String(error);
-          if (message.includes('already being created')) {
-            vscode.window.showInformationMessage(message);
-          } else {
-            vscode.window.showErrorMessage(message);
+          if (error instanceof SessionStartupFailureError) {
+            tree.recordStartupFailure(appId, error.failure);
           }
+          tree.refresh();
+          await reportSessionStartupFailure(error);
         }
       }
     )

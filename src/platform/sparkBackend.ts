@@ -28,6 +28,7 @@ export interface SparkSessionHandle {
     }
   ): Promise<LivyStatement>;
   refreshState(): Promise<void>;
+  waitUntilReady(): Promise<void>;
 }
 
 export interface EmrCreateParams {
@@ -77,11 +78,15 @@ export type SparkUiTarget =
 
 /** Spark Backend adapter: AWS session work only — never writes notebook metadata. */
 export interface EmrSparkBackendAdapter {
-  listApplications(): Promise<{ region: string; applications: LivyApplication[] }>;
+  listApplications(options?: {
+    force?: boolean;
+  }): Promise<{ region: string; applications: LivyApplication[] }>;
   listSessions(applicationId: string): Promise<LivySessionInfo[]>;
   attach(applicationId: string, sessionId: number): Promise<SparkSessionHandle>;
   create(params: EmrCreateParams): Promise<SparkSessionHandle>;
   createStandalone(params: EmrCreateParams): Promise<SparkSessionHandle>;
+  /** Best-effort Livy DELETE; ignore 404 / already-dead sessions. */
+  deleteSession(applicationId: string, sessionId: number): Promise<void>;
   refreshDashboard(session: SparkSessionHandle): Promise<string | undefined>;
   resolveDashboardUrl(
     applicationId: string,
@@ -97,6 +102,8 @@ export interface GlueSparkBackendAdapter {
   attach(sessionId: string): Promise<SparkSessionHandle>;
   create(params: GlueCreateParams): Promise<SparkSessionHandle>;
   createStandalone(params: GlueCreateParams): Promise<SparkSessionHandle>;
+  /** Best-effort Glue Stop+Delete; ignore missing sessions. */
+  deleteSession(sessionId: string): Promise<void>;
   refreshDashboard(session: SparkSessionHandle): Promise<string | undefined>;
   resolveDashboardUrl(sessionId: string): Promise<string | undefined>;
   isCreatingSession(): boolean;

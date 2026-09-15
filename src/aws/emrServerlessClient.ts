@@ -55,7 +55,23 @@ export class EmrServerlessService {
     return this.region;
   }
 
-  async listLivyApplications(): Promise<LivyApplication[]> {
+  private listCache:
+    | { profile: string | undefined; region: string; at: number; applications: LivyApplication[] }
+    | undefined;
+
+  async listLivyApplications(options?: { force?: boolean }): Promise<LivyApplication[]> {
+    const profile = getConfiguredAwsProfile();
+    const region = await this.getRegion();
+    if (
+      !options?.force &&
+      this.listCache &&
+      this.listCache.profile === profile &&
+      this.listCache.region === region &&
+      Date.now() - this.listCache.at < 15_000
+    ) {
+      return this.listCache.applications;
+    }
+
     const client = await this.getClient();
     const apps: LivyApplication[] = [];
     let nextToken: string | undefined;
@@ -81,6 +97,7 @@ export class EmrServerlessService {
       nextToken = response.nextToken;
     } while (nextToken);
 
+    this.listCache = { profile, region, at: Date.now(), applications: apps };
     return apps;
   }
 

@@ -6,7 +6,9 @@ import type {
   EmrSparkBackendAdapter,
   GlueSparkBackendAdapter,
 } from '../platform/sparkBackend';
+import type { EmrSessionCatalog, GlueSessionCatalog } from '../platform/sessionCatalog';
 import type { SessionPresetStore } from '../session/presets';
+import { isSessionGoneError } from '../session/sessionState';
 import { createKernelSelectionSteps } from './createKernelSelectionSteps';
 import { selectKernel } from './selectKernel';
 
@@ -17,7 +19,8 @@ export async function promptSparkConnection(
   emrPresetStore: SessionPresetStore,
   gluePresetStore: GlueSessionPresetStore,
   notebook?: vscode.NotebookDocument,
-  onConnected?: (notebook: vscode.NotebookDocument) => void
+  onConnected?: (notebook: vscode.NotebookDocument) => void,
+  catalogs?: { emr?: EmrSessionCatalog; glue?: GlueSessionCatalog }
 ): Promise<boolean> {
   const targetNotebook =
     notebook ??
@@ -31,7 +34,30 @@ export async function promptSparkConnection(
     return false;
   }
 
-  const steps = createKernelSelectionSteps(emr, glue, emrPresetStore, gluePresetStore);
+  if (connection.hasSessionBinding(targetNotebook)) {
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Reconnecting to Spark session…',
+        },
+        () => connection.ensureConnected(targetNotebook)
+      );
+      onConnected?.(targetNotebook);
+      return true;
+    } catch (error) {
+      if (!isSessionGoneError(error) && connection.hasSessionBinding(targetNotebook)) {
+        vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : String(error)
+        );
+        return false;
+      }
+    }
+  }
+
+  const steps = createKernelSelectionSteps(emr, glue, emrPresetStore, gluePresetStore, {
+    catalogs,
+  });
   const connected = await selectKernel(connection, steps, targetNotebook);
 
   if (connected) {
@@ -39,6 +65,3 @@ export async function promptSparkConnection(
   }
   return connected;
 }
-
-/** @deprecated Use promptSparkConnection */
-export const promptEmrConnection = promptSparkConnection;

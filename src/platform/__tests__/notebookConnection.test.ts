@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { NotebookConnection } from '../notebookConnection';
 import type { NotebookRef, NotebookWorkspace } from '../notebookWorkspace';
-import { FakeEmrAdapter, FakeGlueAdapter } from './fakes';
+import { createHandle, FakeEmrAdapter, FakeGlueAdapter } from './fakes';
 
 function createNotebook(
   uri: string,
@@ -175,5 +175,213 @@ describe('Spark UI target', () => {
 
     const url = await connection.openSparkUi(notebook);
     assert.equal(url, 'https://emr.example/app-x/9');
+  });
+});
+
+describe('NotebookConnection live binding policy', () => {
+  it('keeps Session Binding on transient refresh errors', async () => {
+    const emr = new FakeEmrAdapter();
+    emr.attach = async (applicationId, sessionId) => {
+      const handle = createHandle({
+        backend: 'emr',
+        sessionId,
+        applicationId,
+      });
+      handle.refreshState = async () => {
+        throw new Error('Livy API error (503): unavailable');
+      };
+      return handle;
+    };
+    const notebook = createNotebook('file:///transient.ipynb');
+    const workspace = createMemoryWorkspace([notebook]);
+    const connection = new NotebookConnection(emr, new FakeGlueAdapter(), workspace);
+
+    await connection.attach(notebook, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionId: 3,
+    });
+    const session = await connection.ensureConnected(notebook);
+    assert.equal(session.sessionId, 3);
+    assert.equal(notebook.metadata.emrServerless?.sessionId, 3);
+    assert.equal(connection.isConnected(notebook), true);
+  });
+
+  it('clears Session Binding when refresh reports the session is gone', async () => {
+    const emr = new FakeEmrAdapter();
+    emr.attach = async (applicationId, sessionId) => {
+      const handle = createHandle({
+        backend: 'emr',
+        sessionId,
+        applicationId,
+      });
+      handle.refreshState = async () => {
+        throw new Error('Livy API error (404): Session not found');
+      };
+      return handle;
+    };
+    const notebook = createNotebook('file:///gone.ipynb');
+    const workspace = createMemoryWorkspace([notebook]);
+    const connection = new NotebookConnection(emr, new FakeGlueAdapter(), workspace);
+
+    await connection.attach(notebook, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionId: 9,
+    });
+    await assert.rejects(() => connection.ensureConnected(notebook), /not connected/);
+    assert.equal(notebook.metadata.emrServerless?.sessionId, undefined);
+    assert.equal(connection.hasSessionBinding(notebook), false);
+  });
+
+  it('waits for a starting session instead of wiping the binding', async () => {
+    const emr = new FakeEmrAdapter();
+    emr.attach = async (applicationId, sessionId) => {
+      const handle = createHandle({
+        backend: 'emr',
+        sessionId,
+        applicationId,
+        state: 'starting',
+        isReady: false,
+      });
+      handle.refreshState = async () => {
+        /* stay starting */
+      };
+      handle.waitUntilReady = async () => {
+        handle.state = 'idle';
+        handle.isReady = true;
+      };
+      return handle;
+    };
+    const notebook = createNotebook('file:///starting.ipynb');
+    const workspace = createMemoryWorkspace([notebook]);
+    const connection = new NotebookConnection(emr, new FakeGlueAdapter(), workspace);
+
+    await connection.attach(notebook, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionId: 4,
+    });
+    const session = await connection.ensureConnected(notebook);
+    assert.equal(session.isReady, true);
+    assert.equal(notebook.metadata.emrServerless?.sessionId, 4);
+  });
+
+  it('disconnectAll clears notebook metadata', async () => {
+    const notebook = createNotebook('file:///aws.ipynb');
+    const workspace = createMemoryWorkspace([notebook]);
+    const connection = new NotebookConnection(
+      new FakeEmrAdapter(),
+      new FakeGlueAdapter(),
+      workspace
+    );
+
+    await connection.attach(notebook, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionId: 2,
+    });
+    await connection.disconnectAll();
+    assert.deepEqual(notebook.metadata.emrServerless, {});
+    assert.equal(connection.hasSessionBinding(notebook), false);
+    assert.equal(connection.isConnected(notebook), false);
+  });
+
+  it('createForNotebook does not reuse a live session on the same application', async () => {
+    const emr = new FakeEmrAdapter();
+    const notebook = createNotebook('file:///create.ipynb');
+    const workspace = createMemoryWorkspace([notebook]);
+    const connection = new NotebookConnection(emr, new FakeGlueAdapter(), workspace);
+
+    await connection.attach(notebook, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionId: 1,
+    });
+    const created = await connection.createForNotebook(notebook, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionName: 'next',
+    });
+    assert.equal(emr.createCalls.length, 1);
+    assert.notEqual(created.sessionId, 1);
+    assert.equal(notebook.metadata.emrServerless?.sessionId, created.sessionId);
+    assert.deepEqual(emr.deleteSessionCalls, [{ applicationId: 'app-1', sessionId: 1 }]);
+  });
+
+  it('createForNotebook does not delete a Livy session still bound to another notebook', async () => {
+    const emr = new FakeEmrAdapter();
+    const first = createNotebook('file:///shared-a.ipynb');
+    const second = createNotebook('file:///shared-b.ipynb');
+    const workspace = createMemoryWorkspace([first, second]);
+    const connection = new NotebookConnection(emr, new FakeGlueAdapter(), workspace);
+
+    await connection.attach(first, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionId: 1,
+    });
+    await connection.attach(second, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionId: 1,
+    });
+    await connection.createForNotebook(first, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionName: 'next',
+    });
+    assert.deepEqual(emr.deleteSessionCalls, []);
+    assert.equal(second.metadata.emrServerless?.sessionId, 1);
+  });
+
+  it('createForNotebook deletes a metadata-only Glue session before creating a new one', async () => {
+    const glue = new FakeGlueAdapter();
+    const notebook = createNotebook('file:///glue-replace.ipynb', {
+      glueInteractive: { sessionId: 'gs-old' },
+    });
+    const workspace = createMemoryWorkspace([notebook]);
+    const connection = new NotebookConnection(new FakeEmrAdapter(), glue, workspace);
+
+    await connection.createForNotebook(notebook, { backend: 'glue' });
+    assert.deepEqual(glue.deleteSessionCalls, ['gs-old']);
+    assert.notEqual(notebook.metadata.glueInteractive?.sessionId, 'gs-old');
+  });
+
+  it('serializes concurrent attach calls on the same notebook', async () => {
+    const emr = new FakeEmrAdapter();
+    const notebook = createNotebook('file:///lock.ipynb');
+    const workspace = createMemoryWorkspace([notebook]);
+    const connection = new NotebookConnection(emr, new FakeGlueAdapter(), workspace);
+
+    await Promise.all([
+      connection.attach(notebook, { backend: 'emr', applicationId: 'app-1', sessionId: 1 }),
+      connection.attach(notebook, { backend: 'emr', applicationId: 'app-1', sessionId: 2 }),
+    ]);
+    assert.equal(emr.attachCalls.length, 2);
+    assert.equal(notebook.metadata.emrServerless?.sessionId, 2);
+    assert.equal(connection.getSession(notebook)?.sessionId, 2);
+  });
+
+  it('emits onDidChangeConnection after bind and disconnect', async () => {
+    const notebook = createNotebook('file:///events.ipynb');
+    const workspace = createMemoryWorkspace([notebook]);
+    const connection = new NotebookConnection(
+      new FakeEmrAdapter(),
+      new FakeGlueAdapter(),
+      workspace
+    );
+    const events: string[] = [];
+    connection.onDidChangeConnection((nb) => {
+      events.push(nb.uri.toString());
+    });
+
+    await connection.attach(notebook, {
+      backend: 'emr',
+      applicationId: 'app-1',
+      sessionId: 1,
+    });
+    await connection.disconnect(notebook);
+    assert.deepEqual(events, ['file:///events.ipynb', 'file:///events.ipynb']);
   });
 });

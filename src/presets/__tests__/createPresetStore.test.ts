@@ -140,6 +140,12 @@ describe('createPresetStore policy', () => {
         ),
       /Invalid Spark package/
     );
+
+    await assert.rejects(
+      () =>
+        store.save({ id: 'a', name: 'A', sparkPackages: ['iceberg-spark'] }, 'user'),
+      /Invalid Spark package/
+    );
   });
 
   it('save persists normalized packages', async () => {

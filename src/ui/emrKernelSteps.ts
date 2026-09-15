@@ -1,6 +1,7 @@
 import type { LivyApplication } from '../aws/emrServerlessClient';
 import { formatLivySessionLabel, type LivySessionInfo } from '../livy/types';
 import type { SessionPreset, SessionPresetStore } from '../session/presets';
+import type { EmrSessionCatalog } from '../platform/sessionCatalog';
 import type {
   CreateForNotebookParams,
   CreatingSessionQuery,
@@ -30,7 +31,8 @@ export class EmrKernelSteps implements KernelSelectionSteps {
     private readonly emr: EmrSparkBackendAdapter,
     private readonly presetStore: SessionPresetStore,
     private readonly ui: WizardUi,
-    private readonly deps: EmrKernelStepsDeps
+    private readonly deps: EmrKernelStepsDeps,
+    private readonly catalog?: EmrSessionCatalog
   ) {}
 
   creatingQuery(): CreatingSessionQuery {
@@ -46,11 +48,22 @@ export class EmrKernelSteps implements KernelSelectionSteps {
     let region: string;
     let applications: LivyApplication[];
     try {
-      const listed = await this.ui.withProgress('Loading EMR applications…', () =>
-        this.emr.listApplications()
-      );
-      region = listed.region;
-      applications = listed.applications;
+      if (this.catalog) {
+        await this.ui.withProgress('Loading EMR applications…', () =>
+          this.catalog!.refreshIfStale()
+        );
+        if (this.catalog.loadError) {
+          return { status: 'error', message: this.catalog.loadError };
+        }
+        region = this.catalog.region;
+        applications = this.catalog.applications;
+      } else {
+        const listed = await this.ui.withProgress('Loading EMR applications…', () =>
+          this.emr.listApplications()
+        );
+        region = listed.region;
+        applications = listed.applications;
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { status: 'error', message };
@@ -84,11 +97,15 @@ export class EmrKernelSteps implements KernelSelectionSteps {
     this.selectedApp = appPick.app;
 
     let sessions: LivySessionInfo[] = [];
-    try {
-      sessions = await this.emr.listSessions(appPick.app.id);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.ui.showWarningMessage(`Could not list sessions: ${message}`);
+    if (this.catalog) {
+      sessions = this.catalog.sessionsFor(appPick.app.id);
+    } else {
+      try {
+        sessions = await this.emr.listSessions(appPick.app.id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.ui.showWarningMessage(`Could not list sessions: ${message}`);
+      }
     }
 
     return {

@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
-import { formatAwsAuthError } from '../aws/credentials';
-import type { GlueSparkBackend } from '../glue/connectionManager';
-import { formatGlueSessionLabel, type GlueSessionSummary } from '../glue/types';
+import { formatGlueSessionLabel } from '../glue/types';
+import type { GlueSessionCatalog } from '../platform/sessionCatalog';
 
 export const GLUE_SESSIONS_VIEW_ID = 'glueInteractiveSessions';
 
@@ -10,6 +9,7 @@ export type GlueTreeNodeKind =
   | 'sessionReady'
   | 'sessionProvisioning'
   | 'sessionStopped'
+  | 'sessionFailed'
   | 'loading'
   | 'error'
   | 'empty';
@@ -50,6 +50,8 @@ function iconForKind(kind: GlueTreeNodeKind): vscode.ThemeIcon {
       return new vscode.ThemeIcon('loading~spin');
     case 'sessionStopped':
       return new vscode.ThemeIcon('debug-disconnect');
+    case 'sessionFailed':
+      return new vscode.ThemeIcon('error');
     case 'loading':
       return new vscode.ThemeIcon('loading~spin');
     case 'error':
@@ -66,10 +68,11 @@ function kindForStatus(status: string): GlueTreeNodeKind {
     case 'PROVISIONING':
       return 'sessionProvisioning';
     case 'STOPPED':
-    case 'FAILED':
-    case 'TIMEOUT':
     case 'STOPPING':
       return 'sessionStopped';
+    case 'FAILED':
+    case 'TIMEOUT':
+      return 'sessionFailed';
     default:
       return 'session';
   }
@@ -79,32 +82,16 @@ export class GlueSessionsTreeProvider implements vscode.TreeDataProvider<GlueSes
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<GlueSessionsTreeItem | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private sessions: GlueSessionSummary[] = [];
-  private region = '';
-  private loadError: string | undefined;
-  private loading = false;
-
-  constructor(private readonly glueBackend: GlueSparkBackend) {}
+  constructor(private readonly catalog: GlueSessionCatalog) {
+    catalog.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
+  }
 
   refresh(): void {
-    void this.loadSessions();
-    this._onDidChangeTreeData.fire(undefined);
+    void this.catalog.refresh();
   }
 
   async loadSessions(): Promise<void> {
-    this.loading = true;
-    this.loadError = undefined;
-    try {
-      const { region, sessions } = await this.glueBackend.listSessions();
-      this.region = region;
-      this.sessions = sessions;
-    } catch (error) {
-      this.loadError = formatAwsAuthError(error);
-      this.sessions = [];
-    } finally {
-      this.loading = false;
-      this._onDidChangeTreeData.fire(undefined);
-    }
+    await this.catalog.refresh();
   }
 
   getTreeItem(element: GlueSessionsTreeItem): vscode.TreeItem {
@@ -116,58 +103,65 @@ export class GlueSessionsTreeProvider implements vscode.TreeDataProvider<GlueSes
       return [];
     }
 
-    if (this.loading && this.sessions.length === 0 && !this.loadError) {
+    const region = this.catalog.region;
+    const sessions = this.catalog.sessions;
+    const loadError = this.catalog.loadError;
+    const loading = this.catalog.loading;
+
+    if (loading && sessions.length === 0 && !loadError) {
       return [
         new GlueSessionsTreeItem(
           'loading',
-          { region: this.region },
+          { region },
           'Loading Glue sessions…',
           vscode.TreeItemCollapsibleState.None
         ),
       ];
     }
 
-    if (this.loadError) {
+    if (loadError) {
       return [
         new GlueSessionsTreeItem(
           'error',
-          { region: this.region },
+          { region },
           'Failed to load',
           vscode.TreeItemCollapsibleState.None,
-          { description: this.loadError, tooltip: this.loadError }
+          { description: loadError, tooltip: loadError }
         ),
       ];
     }
 
-    const items: GlueSessionsTreeItem[] = this.sessions.map((session) =>
-      new GlueSessionsTreeItem(
-        kindForStatus(session.status),
-        {
-          sessionId: session.id,
-          sessionStatus: session.status,
-          region: this.region,
-        },
-        formatGlueSessionLabel(session),
-        vscode.TreeItemCollapsibleState.None,
-        {
-          description: `${session.status} · ${session.workerType ?? '?'} · ${session.numberOfWorkers ?? '?'} workers`,
-          tooltip: [
-            session.id,
-            session.description ? `Description: ${session.description}` : undefined,
-            session.glueVersion ? `Glue ${session.glueVersion}` : undefined,
-            session.role ? `Role: ${session.role}` : undefined,
-          ]
-            .filter(Boolean)
-            .join('\n'),
-        }
-      )
+    const items: GlueSessionsTreeItem[] = sessions.map(
+      (session) =>
+        new GlueSessionsTreeItem(
+          kindForStatus(session.status),
+          {
+            sessionId: session.id,
+            sessionStatus: session.status,
+            region,
+          },
+          formatGlueSessionLabel(session),
+          vscode.TreeItemCollapsibleState.None,
+          {
+            description: `${session.status} · ${session.workerType ?? '?'} · ${session.numberOfWorkers ?? '?'} workers`,
+            tooltip: [
+              session.id,
+              session.description ? `Description: ${session.description}` : undefined,
+              session.glueVersion ? `Glue ${session.glueVersion}` : undefined,
+              session.role ? `Role: ${session.role}` : undefined,
+              session.errorMessage ? session.errorMessage : undefined,
+            ]
+              .filter(Boolean)
+              .join('\n'),
+          }
+        )
     );
 
-    if (this.glueBackend.isCreatingSession()) {
+    if (this.catalog.isCreatingSession()) {
       items.push(
         new GlueSessionsTreeItem(
           'loading',
-          { region: this.region },
+          { region },
           'Creating session…',
           vscode.TreeItemCollapsibleState.None,
           { description: 'Please wait' }
@@ -177,7 +171,7 @@ export class GlueSessionsTreeProvider implements vscode.TreeDataProvider<GlueSes
       items.push(
         new GlueSessionsTreeItem(
           'empty',
-          { region: this.region },
+          { region },
           'New session…',
           vscode.TreeItemCollapsibleState.None,
           {
@@ -194,11 +188,11 @@ export class GlueSessionsTreeProvider implements vscode.TreeDataProvider<GlueSes
       return [
         new GlueSessionsTreeItem(
           'empty',
-          { region: this.region },
+          { region },
           'No active Glue Livy sessions',
           vscode.TreeItemCollapsibleState.None,
           {
-            description: this.region,
+            description: region,
             command: {
               command: 'glueInteractive.newSession',
               title: 'New Glue Session',
@@ -214,15 +208,23 @@ export class GlueSessionsTreeProvider implements vscode.TreeDataProvider<GlueSes
 
 export function registerGlueSessionsTree(
   context: vscode.ExtensionContext,
-  glueBackend: GlueSparkBackend
+  catalog: GlueSessionCatalog
 ): GlueSessionsTreeProvider {
-  const provider = new GlueSessionsTreeProvider(glueBackend);
+  const provider = new GlueSessionsTreeProvider(catalog);
 
+  const view = vscode.window.createTreeView(GLUE_SESSIONS_VIEW_ID, {
+    treeDataProvider: provider,
+  });
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider(GLUE_SESSIONS_VIEW_ID, provider)
+    view,
+    { dispose: () => catalog.dispose() },
+    view.onDidChangeVisibility((event) => catalog.setViewVisible(event.visible))
   );
+  if (view.visible) {
+    catalog.setViewVisible(true);
+  }
 
-  void provider.loadSessions();
+  void catalog.refresh();
 
   return provider;
 }

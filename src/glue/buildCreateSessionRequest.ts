@@ -1,3 +1,4 @@
+import { applyInteractiveSparkDefaults } from '../session/interactiveSparkDefaults';
 import { applySparkPackagesToConf } from '../session/sparkPackages';
 import type { CreateGlueSessionInput } from './glueSessionService';
 import type { WorkerType } from '@aws-sdk/client-glue';
@@ -19,6 +20,7 @@ function buildFromPreset(
 ): CreateGlueSessionInput {
   const defaultArguments = { ...preset.defaultArguments };
   applySparkPackagesToConf(defaultArguments, preset.sparkPackages);
+  applyInteractiveSparkDefaults(defaultArguments);
 
   const description = options?.sessionName?.trim() || preset.sessionDescription?.trim();
   const id = options?.sessionId ?? createGlueSessionId(description);

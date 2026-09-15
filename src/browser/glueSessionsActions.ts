@@ -6,27 +6,16 @@ import { GlueLivySession } from '../glue/glueSession';
 import { getGlueSessionPresetStore } from '../glue/presets';
 import { pickGlueSessionPreset } from '../ui/pickGlueSessionPreset';
 import { promptSessionName } from '../ui/promptSessionName';
+import { reportSessionStartupFailure } from '../ui/sessionStartupError';
 import { openEmrSparkNotebook } from '../notebook/openNotebook';
-import { isEmrSparkNotebook } from '../notebook/types';
 import { createBlankSparknbDocument } from '../notebook/defaultDocument';
 import type { GlueSessionsTreeProvider } from './glueSessionsTreeProvider';
+import {
+  findOpenSparknb,
+  getActiveSparknb,
+  resolveNotebookForAttach,
+} from './attachNotebook';
 import type { EmrKernelManager } from '../notebook/kernelManager';
-
-function getActiveSparknb(): vscode.NotebookDocument | undefined {
-  const editor = vscode.window.activeNotebookEditor;
-  if (editor && isEmrSparkNotebook(editor.notebook)) {
-    return editor.notebook;
-  }
-  return undefined;
-}
-
-function findOpenSparknb(): vscode.NotebookDocument | undefined {
-  const active = getActiveSparknb();
-  if (active) {
-    return active;
-  }
-  return vscode.workspace.notebookDocuments.find((nb) => isEmrSparkNotebook(nb));
-}
 
 const ACTIVE_GLUE_SESSION_STATUSES = new Set(['READY', 'PROVISIONING']);
 
@@ -41,38 +30,6 @@ async function deleteGlueSession(sessionId: string): Promise<void> {
     // Session may already be stopped or removed; still attempt delete.
   }
   await service.deleteSession(sessionId);
-}
-
-async function resolveNotebookForAttach(sessionId: string): Promise<vscode.NotebookDocument> {
-  const active = getActiveSparknb();
-  if (active) {
-    return active;
-  }
-
-  const existing = vscode.workspace.notebookDocuments.find(
-    (nb) =>
-      isEmrSparkNotebook(nb) &&
-      (nb.metadata?.glueInteractive as { sessionId?: string } | undefined)?.sessionId === sessionId
-  );
-
-  if (existing) {
-    await vscode.window.showNotebookDocument(existing);
-    return existing;
-  }
-
-  const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
-  const target = folder
-    ? vscode.Uri.joinPath(folder, `spark-${Date.now()}.ipynb`)
-    : vscode.Uri.parse(`untitled:spark-${Date.now()}.ipynb`);
-
-  const doc = createBlankSparknbDocument();
-  const bytes = new TextEncoder().encode(JSON.stringify(doc, null, 2));
-  await vscode.workspace.fs.writeFile(target, bytes);
-  const notebook = await openEmrSparkNotebook(target);
-  if (!notebook) {
-    throw new Error(`Failed to open notebook: ${target.fsPath}`);
-  }
-  return notebook;
 }
 
 export function registerGlueSessionsActions(
@@ -95,7 +52,30 @@ export function registerGlueSessionsActions(
         return;
       }
       try {
-        const notebook = await resolveNotebookForAttach(sessionId);
+        const notebook = await resolveNotebookForAttach({
+          connection,
+          sessionLabel: `Glue session ${sessionId}`,
+          isThisSession: (nb) =>
+            (nb.metadata?.glueInteractive as { sessionId?: string } | undefined)?.sessionId ===
+            sessionId,
+          createNotebook: async () => {
+            const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+            const target = folder
+              ? vscode.Uri.joinPath(folder, `spark-${Date.now()}.ipynb`)
+              : vscode.Uri.parse(`untitled:spark-${Date.now()}.ipynb`);
+            const doc = createBlankSparknbDocument();
+            const bytes = new TextEncoder().encode(JSON.stringify(doc, null, 2));
+            await vscode.workspace.fs.writeFile(target, bytes);
+            const created = await openEmrSparkNotebook(target);
+            if (!created) {
+              throw new Error(`Failed to open notebook: ${target.fsPath}`);
+            }
+            return created;
+          },
+        });
+        if (!notebook) {
+          return;
+        }
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
@@ -112,8 +92,7 @@ export function registerGlueSessionsActions(
         void vscode.commands.executeCommand('glueInteractive.refreshSessions');
         void vscode.commands.executeCommand('emrServerless.refreshSidebarState');
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(message);
+        await reportSessionStartupFailure(error);
       }
     })
   );
@@ -252,12 +231,7 @@ export function registerGlueSessionsActions(
         });
         tree.refresh();
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message.includes('already being created')) {
-          vscode.window.showInformationMessage(message);
-        } else {
-          vscode.window.showErrorMessage(message);
-        }
+        await reportSessionStartupFailure(error);
       }
     })
   );

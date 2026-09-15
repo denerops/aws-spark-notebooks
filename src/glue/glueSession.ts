@@ -11,9 +11,14 @@ import {
 } from './types';
 import type { LivyStatement, StatementKind } from '../livy/types';
 import { EMR_DISPLAY_BOOTSTRAP } from '../livy/types';
-
-const READY_STATES = new Set(['idle', 'busy']);
-const DEAD_STATES = new Set(['dead', 'error', 'killed', 'shutting_down']);
+import {
+  diagnoseGlueStartupFailure,
+  SessionStartupFailureError,
+} from '../session/diagnoseStartupFailure';
+import {
+  DEAD_SESSION_STATES,
+  READY_SESSION_STATES,
+} from '../session/sessionState';
 
 export class GlueLivySession {
   private bootstrapped = false;
@@ -30,7 +35,7 @@ export class GlueLivySession {
   ) {}
 
   get isReady(): boolean {
-    return READY_STATES.has(this.state);
+    return READY_SESSION_STATES.has(this.state);
   }
 
   get dashboardUrl(): string | undefined {
@@ -79,6 +84,7 @@ export class GlueLivySession {
       summary.description
     );
     await session.waitUntilReady();
+    await session.bootstrap();
     return session;
   }
 
@@ -86,11 +92,17 @@ export class GlueLivySession {
     const service = getGlueSessionService();
     const summary = await service.getSession(sessionId);
     const state = mapGlueStatusToLivyState(summary.status);
-    if (DEAD_STATES.has(state)) {
-      throw new Error(`Glue session ${sessionId} is not active (status: ${summary.status})`);
+    if (DEAD_SESSION_STATES.has(state)) {
+      throw new SessionStartupFailureError(
+        diagnoseGlueStartupFailure({
+          status: summary.status,
+          errorMessage: summary.errorMessage,
+          sessionId: summary.id,
+        })
+      );
     }
     const session = new GlueLivySession(region, sessionId, state, summary.description);
-    if (!READY_STATES.has(state)) {
+    if (!READY_SESSION_STATES.has(state)) {
       await session.waitUntilReady();
     }
     return session;

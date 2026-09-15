@@ -70,6 +70,12 @@ export function createHandle(
     async refreshState() {
       /* keep current state */
     },
+    async waitUntilReady() {
+      if (state.ready) {
+        return;
+      }
+      throw new Error(`Timed out waiting for session ${init.sessionId} to become ready`);
+    },
   };
 }
 
@@ -86,7 +92,9 @@ export class FakeEmrAdapter implements EmrSparkBackendAdapter {
     return this.creating.has(applicationId);
   }
 
-  async listApplications(): Promise<{ region: string; applications: LivyApplication[] }> {
+  async listApplications(_options?: {
+    force?: boolean;
+  }): Promise<{ region: string; applications: LivyApplication[] }> {
     return { region: this.region, applications: this.applications };
   }
 
@@ -119,8 +127,14 @@ export class FakeEmrAdapter implements EmrSparkBackendAdapter {
     });
   }
 
+  deleteSessionCalls: Array<{ applicationId: string; sessionId: number }> = [];
+
   async createStandalone(params: EmrCreateParams): Promise<SparkSessionHandle> {
     return this.create(params);
+  }
+
+  async deleteSession(applicationId: string, sessionId: number): Promise<void> {
+    this.deleteSessionCalls.push({ applicationId, sessionId });
   }
 
   async refreshDashboard(session: SparkSessionHandle): Promise<string | undefined> {
@@ -178,8 +192,14 @@ export class FakeGlueAdapter implements GlueSparkBackendAdapter {
     });
   }
 
+  deleteSessionCalls: string[] = [];
+
   async createStandalone(params: GlueCreateParams): Promise<SparkSessionHandle> {
     return this.create(params);
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    this.deleteSessionCalls.push(sessionId);
   }
 
   async refreshDashboard(session: SparkSessionHandle): Promise<string | undefined> {

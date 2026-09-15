@@ -162,9 +162,35 @@ export class LivySigV4Client {
     }
   }
 
+  async sendHeartbeat(sessionId: number): Promise<void> {
+    const response = await this.signedFetch('POST', `/sessions/${sessionId}/heartbeat`, {});
+    if (!response.ok && (response.status === 404 || response.status === 405)) {
+      await this.getSession(sessionId);
+      return;
+    }
+    await this.parseJson(response);
+  }
+
   async deleteSession(sessionId: number): Promise<void> {
     const response = await this.signedFetch('DELETE', `/sessions/${sessionId}`);
     await this.parseJson(response);
+  }
+
+  async getSessionLog(
+    sessionId: number,
+    options?: { from?: number; size?: number }
+  ): Promise<string[]> {
+    const from = options?.from ?? 0;
+    const size = options?.size ?? 1000;
+    const response = await this.signedFetch(
+      'GET',
+      `/sessions/${sessionId}/log?from=${from}&size=${size}`
+    );
+    const data = await this.parseJson<unknown>(response);
+    if (data && typeof data === 'object' && Array.isArray((data as { log?: unknown }).log)) {
+      return (data as { log: unknown[] }).log.map(String);
+    }
+    return [];
   }
 
   async submitStatement(

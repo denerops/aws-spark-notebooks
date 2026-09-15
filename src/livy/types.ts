@@ -171,4 +171,53 @@ def __emr_run_pip(arg_string):
         print(f"Packages registered for import from {target}")
 
 __emr_register_pip_target(__emr_pip_target_dir())
+
+def __emr_reuse_livy_spark():
+    try:
+        from pyspark.sql import SparkSession
+        from pyspark.context import SparkContext
+    except ImportError:
+        return
+
+    if getattr(SparkSession.Builder.getOrCreate, "__emr_patched__", False):
+        return
+
+    _orig_get_or_create = SparkSession.Builder.getOrCreate
+
+    def _existing_session():
+        existing = SparkSession.getActiveSession()
+        if existing is not None:
+            return existing
+        spark = globals().get("spark")
+        if spark is not None:
+            return spark
+        sc = getattr(SparkContext, "_active_spark_context", None)
+        if sc is not None:
+            return SparkSession(sc)
+        return None
+
+    def _get_or_create(self):
+        existing = _existing_session()
+        if existing is not None:
+            return existing
+        return _orig_get_or_create(self)
+
+    def _session_stop(self):
+        print(
+            "Warning: spark.stop() is ignored in AWS Spark notebooks. "
+            "Disconnect the notebook or stop the Livy session from the sidebar."
+        )
+
+    def _context_stop(self, *args, **kwargs):
+        print(
+            "Warning: sc.stop() is ignored in AWS Spark notebooks. "
+            "Disconnect the notebook or stop the Livy session from the sidebar."
+        )
+
+    _get_or_create.__emr_patched__ = True
+    SparkSession.Builder.getOrCreate = _get_or_create
+    SparkSession.stop = _session_stop
+    SparkContext.stop = _context_stop
+
+__emr_reuse_livy_spark()
 `.trim();

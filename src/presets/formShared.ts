@@ -3,11 +3,10 @@
  * Injected into backend-specific form scripts.
  */
 
+export { SPARK_PACKAGE_SPEC_PATTERN_SOURCE } from '../session/sparkPackages';
+
 /** Python package regex (no whitespace/shell metacharacters). */
 export const PYTHON_PACKAGE_SPEC_PATTERN_SOURCE = '^[^\\s;&|`$()]+$';
-
-/** Spark package regex — also forbids commas (server assert alignment). */
-export const SPARK_PACKAGE_SPEC_PATTERN_SOURCE = '^[^\\s,;&|`$()]+$';
 
 /** Client-side helpers for package list rows and KV editors with optional autocomplete. */
 export function formSharedScript(): string {
