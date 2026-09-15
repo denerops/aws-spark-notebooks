@@ -1,6 +1,11 @@
 import type { GlueNotebookMetadata, SparkNotebookMetadata } from '../notebook/types';
 import { formatGlueSessionLabel } from '../glue/types';
 import { formatLivySessionLabel } from '../livy/types';
+import {
+  isDeadSessionState,
+  isSessionGoneError,
+  isStartingSessionState,
+} from '../session/sessionState';
 import type {
   AttachParams,
   ConnectionView,
@@ -30,13 +35,23 @@ interface LiveBinding {
  */
 export class NotebookConnection {
   private readonly bindings = new Map<string, LiveBinding>();
-  private readonly connecting = new Map<string, Promise<SparkSessionHandle>>();
+  private readonly locks = new Map<string, Promise<void>>();
+  private readonly connectionListeners = new Set<(notebook: NotebookRef) => void>();
 
   constructor(
     private readonly emr: EmrSparkBackendAdapter,
     private readonly glue: GlueSparkBackendAdapter,
     private readonly workspace: NotebookWorkspace
   ) {}
+
+  onDidChangeConnection(listener: (notebook: NotebookRef) => void): { dispose(): void } {
+    this.connectionListeners.add(listener);
+    return {
+      dispose: () => {
+        this.connectionListeners.delete(listener);
+      },
+    };
+  }
 
   /** Live + ready Spark session available for cell execution. */
   isConnected(notebook: NotebookRef): boolean {
@@ -53,7 +68,9 @@ export class NotebookConnection {
   }
 
   hasAnyBindings(): boolean {
-    return this.bindings.size > 0;
+    return this.bindings.size > 0 || this.workspace.listSparkNotebooks().some((nb) =>
+      this.resolveBackendFromMetadata(nb) !== undefined
+    );
   }
 
   resolveBackend(notebook: NotebookRef): SparkBackend | undefined {
@@ -144,98 +161,80 @@ export class NotebookConnection {
   }
 
   async ensureConnected(notebook: NotebookRef): Promise<SparkSessionHandle> {
-    const key = this.key(notebook);
-    const live = await this.getLiveBinding(notebook);
-    if (live) {
-      if (!live.session.dashboardUrl) {
-        await this.refreshDashboard(live.session).catch(() => undefined);
-      }
-      return live.session;
-    }
-
-    const inFlight = this.connecting.get(key);
-    if (inFlight) {
-      return inFlight;
-    }
-
-    const backend = this.resolveBackendFromMetadata(notebook);
-    if (!backend) {
-      throw new Error(
-        'Notebook is not connected. Select an EMR Serverless or Glue Interactive session.'
-      );
-    }
-
-    const connectPromise = (async () => {
-      if (backend === 'glue') {
-        const sessionId = this.readGlueMeta(notebook).sessionId;
-        if (!sessionId) {
-          throw new Error('Notebook is not connected. Run "Glue Interactive: Connect to Session".');
+    return this.withLock(notebook, async () => {
+      const live = await this.getLiveBinding(notebook);
+      if (live) {
+        if (!live.session.dashboardUrl) {
+          await this.refreshDashboard(live.session).catch(() => undefined);
         }
-        return this.attach(notebook, { backend: 'glue', sessionId });
+        return live.session;
       }
 
-      const meta = this.readEmrMeta(notebook);
-      if (!meta.applicationId || meta.sessionId === undefined) {
-        throw new Error('Notebook is not connected. Run "EMR Serverless: Connect to Session".');
+      const backend = this.resolveBackendFromMetadata(notebook);
+      if (!backend) {
+        throw new Error(
+          'Notebook is not connected. Select an EMR Serverless or Glue Interactive session.'
+        );
       }
-      return this.attach(notebook, {
-        backend: 'emr',
-        applicationId: meta.applicationId,
-        sessionId: meta.sessionId,
-      });
-    })().catch(async (error) => {
-      await this.clearSessionBinding(notebook, {
-        keepEmrApplicationId: backend === 'emr',
-      });
-      throw error;
+
+      try {
+        if (backend === 'glue') {
+          const sessionId = this.readGlueMeta(notebook).sessionId;
+          if (!sessionId) {
+            throw new Error(
+              'Notebook is not connected. Run "Glue Interactive: Connect to Session".'
+            );
+          }
+          return await this.attachUnlocked(notebook, { backend: 'glue', sessionId });
+        }
+
+        const meta = this.readEmrMeta(notebook);
+        if (!meta.applicationId || meta.sessionId === undefined) {
+          throw new Error(
+            'Notebook is not connected. Run "EMR Serverless: Connect to Session".'
+          );
+        }
+        return await this.attachUnlocked(notebook, {
+          backend: 'emr',
+          applicationId: meta.applicationId,
+          sessionId: meta.sessionId,
+        });
+      } catch (error) {
+        if (isSessionGoneError(error)) {
+          await this.clearSessionBinding(notebook, {
+            keepEmrApplicationId: backend === 'emr',
+          });
+        }
+        throw error;
+      }
     });
-
-    this.connecting.set(key, connectPromise);
-    try {
-      return await connectPromise;
-    } finally {
-      this.connecting.delete(key);
-    }
   }
 
   async attach(notebook: NotebookRef, params: AttachParams): Promise<SparkSessionHandle> {
-    const session =
-      params.backend === 'emr'
-        ? await this.emr.attach(params.applicationId, params.sessionId)
-        : await this.glue.attach(params.sessionId);
-
-    await this.bind(notebook, params.backend, session);
-    return session;
+    return this.withLock(notebook, () => this.attachUnlocked(notebook, params));
   }
 
   async createForNotebook(
     notebook: NotebookRef,
     params: CreateForNotebookParams
   ): Promise<SparkSessionHandle> {
-    const live = await this.getLiveBinding(notebook);
-    if (live) {
-      if (params.backend === 'emr' && live.backend === 'emr') {
-        if (live.session.applicationId === params.applicationId) {
-          return live.session;
-        }
-      } else if (params.backend === 'glue' && live.backend === 'glue') {
-        return live.session;
-      }
-    }
+    return this.withLock(notebook, async () => {
+      const session =
+        params.backend === 'emr'
+          ? await this.emr.create(params)
+          : await this.glue.create(params);
 
-    const session =
-      params.backend === 'emr'
-        ? await this.emr.create(params)
-        : await this.glue.create(params);
-
-    await this.bind(notebook, params.backend, session);
-    return session;
+      await this.bind(notebook, params.backend, session);
+      return session;
+    });
   }
 
   async disconnect(notebook: NotebookRef): Promise<void> {
-    const backend = this.resolveBackend(notebook);
-    await this.clearSessionBinding(notebook, {
-      keepEmrApplicationId: backend === 'emr',
+    await this.withLock(notebook, async () => {
+      const backend = this.resolveBackend(notebook);
+      await this.clearSessionBinding(notebook, {
+        keepEmrApplicationId: backend === 'emr',
+      });
     });
   }
 
@@ -243,12 +242,16 @@ export class NotebookConnection {
   release(notebook: NotebookRef): void {
     const key = this.key(notebook);
     this.bindings.delete(key);
-    this.connecting.delete(key);
+    this.emitConnectionChange(notebook);
   }
 
   async disconnectAll(): Promise<void> {
+    const notebooks = this.workspace.listSparkNotebooks();
+    for (const notebook of notebooks) {
+      await this.clearSessionBinding(notebook);
+    }
     this.bindings.clear();
-    this.connecting.clear();
+    this.locks.clear();
   }
 
   async refreshDashboard(session: SparkSessionHandle): Promise<string | undefined> {
@@ -399,6 +402,19 @@ export class NotebookConnection {
     return affected;
   }
 
+  private async attachUnlocked(
+    notebook: NotebookRef,
+    params: AttachParams
+  ): Promise<SparkSessionHandle> {
+    const session =
+      params.backend === 'emr'
+        ? await this.emr.attach(params.applicationId, params.sessionId)
+        : await this.glue.attach(params.sessionId);
+
+    await this.bind(notebook, params.backend, session);
+    return session;
+  }
+
   private async getLiveBinding(notebook: NotebookRef): Promise<LiveBinding | undefined> {
     const binding = this.bindings.get(this.key(notebook));
     if (!binding) {
@@ -407,17 +423,47 @@ export class NotebookConnection {
 
     try {
       await binding.session.refreshState();
-    } catch {
-      // Session gone — treat as dead below.
+    } catch (error) {
+      if (isSessionGoneError(error)) {
+        await this.clearSessionBinding(notebook, {
+          keepEmrApplicationId: binding.backend === 'emr',
+        });
+        return undefined;
+      }
+      if (binding.session.isReady) {
+        return binding;
+      }
+      return undefined;
     }
 
     if (binding.session.isReady) {
       return binding;
     }
 
-    await this.clearSessionBinding(notebook, {
-      keepEmrApplicationId: binding.backend === 'emr',
-    });
+    if (isStartingSessionState(binding.session.state)) {
+      try {
+        await binding.session.waitUntilReady();
+      } catch (error) {
+        if (isSessionGoneError(error) || isDeadSessionState(binding.session.state)) {
+          await this.clearSessionBinding(notebook, {
+            keepEmrApplicationId: binding.backend === 'emr',
+          });
+          return undefined;
+        }
+        throw error;
+      }
+      if (binding.session.isReady) {
+        return binding;
+      }
+    }
+
+    if (isDeadSessionState(binding.session.state)) {
+      await this.clearSessionBinding(notebook, {
+        keepEmrApplicationId: binding.backend === 'emr',
+      });
+      return undefined;
+    }
+
     return undefined;
   }
 
@@ -443,6 +489,7 @@ export class NotebookConnection {
         },
         glueInteractive: {},
       });
+      this.emitConnectionChange(notebook);
       return;
     }
 
@@ -451,6 +498,7 @@ export class NotebookConnection {
       glueInteractive: { sessionId: String(session.sessionId) },
       emrServerless: {},
     });
+    this.emitConnectionChange(notebook);
   }
 
   private async clearSessionBinding(
@@ -459,7 +507,6 @@ export class NotebookConnection {
   ): Promise<void> {
     const key = this.key(notebook);
     this.bindings.delete(key);
-    this.connecting.delete(key);
 
     const previous = this.readEmrMeta(notebook);
     const emrServerless: SparkNotebookMetadata = {};
@@ -472,6 +519,36 @@ export class NotebookConnection {
       emrServerless,
       glueInteractive: {},
     });
+    this.emitConnectionChange(notebook);
+  }
+
+  private async withLock<T>(notebook: NotebookRef, fn: () => Promise<T>): Promise<T> {
+    const key = this.key(notebook);
+    const previous = this.locks.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const chained = previous.then(
+      () => gate,
+      () => gate
+    );
+    this.locks.set(key, chained);
+    try {
+      await previous.catch(() => undefined);
+      return await fn();
+    } finally {
+      release();
+      if (this.locks.get(key) === chained) {
+        this.locks.delete(key);
+      }
+    }
+  }
+
+  private emitConnectionChange(notebook: NotebookRef): void {
+    for (const listener of this.connectionListeners) {
+      listener(notebook);
+    }
   }
 
   private resolveBackendFromMetadata(notebook: NotebookRef): SparkBackend | undefined {
@@ -498,6 +575,3 @@ export class NotebookConnection {
     return notebook.uri.toString();
   }
 }
-
-/** @deprecated Use NotebookConnection */
-export { NotebookConnection as NotebookConnectionHub };

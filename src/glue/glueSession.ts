@@ -15,9 +15,10 @@ import {
   diagnoseGlueStartupFailure,
   SessionStartupFailureError,
 } from '../session/diagnoseStartupFailure';
-
-const READY_STATES = new Set(['idle', 'busy']);
-const DEAD_STATES = new Set(['dead', 'error', 'killed', 'shutting_down']);
+import {
+  DEAD_SESSION_STATES,
+  READY_SESSION_STATES,
+} from '../session/sessionState';
 
 export class GlueLivySession {
   private bootstrapped = false;
@@ -34,7 +35,7 @@ export class GlueLivySession {
   ) {}
 
   get isReady(): boolean {
-    return READY_STATES.has(this.state);
+    return READY_SESSION_STATES.has(this.state);
   }
 
   get dashboardUrl(): string | undefined {
@@ -90,7 +91,7 @@ export class GlueLivySession {
     const service = getGlueSessionService();
     const summary = await service.getSession(sessionId);
     const state = mapGlueStatusToLivyState(summary.status);
-    if (DEAD_STATES.has(state)) {
+    if (DEAD_SESSION_STATES.has(state)) {
       throw new SessionStartupFailureError(
         diagnoseGlueStartupFailure({
           status: summary.status,
@@ -100,7 +101,7 @@ export class GlueLivySession {
       );
     }
     const session = new GlueLivySession(region, sessionId, state, summary.description);
-    if (!READY_STATES.has(state)) {
+    if (!READY_SESSION_STATES.has(state)) {
       await session.waitUntilReady();
     }
     return session;

@@ -36,6 +36,7 @@ export async function selectKernel(
 
   const key = notebook.uri.toString();
   if (promptingNotebooks.has(key)) {
+    ui.showInformationMessage('Session selection is already in progress for this notebook.');
     return false;
   }
   promptingNotebooks.add(key);

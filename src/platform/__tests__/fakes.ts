@@ -70,6 +70,12 @@ export function createHandle(
     async refreshState() {
       /* keep current state */
     },
+    async waitUntilReady() {
+      if (state.ready) {
+        return;
+      }
+      throw new Error(`Timed out waiting for session ${init.sessionId} to become ready`);
+    },
   };
 }
 
@@ -86,7 +92,9 @@ export class FakeEmrAdapter implements EmrSparkBackendAdapter {
     return this.creating.has(applicationId);
   }
 
-  async listApplications(): Promise<{ region: string; applications: LivyApplication[] }> {
+  async listApplications(_options?: {
+    force?: boolean;
+  }): Promise<{ region: string; applications: LivyApplication[] }> {
     return { region: this.region, applications: this.applications };
   }
 

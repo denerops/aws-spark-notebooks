@@ -6,12 +6,13 @@ import {
   diagnoseLivyStartupFailure,
   SessionStartupFailureError,
 } from '../session/diagnoseStartupFailure';
+import {
+  DEAD_SESSION_STATES,
+  READY_SESSION_STATES,
+} from '../session/sessionState';
 import { LivySigV4Client } from './sigV4Client';
 import type { LivySessionInfo, LivyStatement, StatementKind } from './types';
 import { EMR_DISPLAY_BOOTSTRAP } from './types';
-
-const READY_STATES = new Set(['idle', 'busy']);
-const DEAD_STATES = new Set(['dead', 'error', 'killed', 'shutting_down']);
 
 export class LivySession {
   private client: LivySigV4Client;
@@ -33,7 +34,7 @@ export class LivySession {
   }
 
   get isReady(): boolean {
-    return READY_STATES.has(this.state);
+    return READY_SESSION_STATES.has(this.state);
   }
 
   get dashboardUrl(): string | undefined {
@@ -102,7 +103,7 @@ export class LivySession {
   ): Promise<LivySession> {
     const client = new LivySigV4Client(applicationId, region);
     const info = await client.getSession(sessionId);
-    if (DEAD_STATES.has(info.state)) {
+    if (DEAD_SESSION_STATES.has(info.state)) {
       throw await errorForDeadLivySession(client, info);
     }
     const session = new LivySession(
@@ -113,7 +114,7 @@ export class LivySession {
       info.appId,
       info.name
     );
-    if (!READY_STATES.has(info.state)) {
+    if (!READY_SESSION_STATES.has(info.state)) {
       await session.waitUntilReady();
     }
     return session;
@@ -138,10 +139,10 @@ export class LivySession {
     while (Date.now() - started < timeoutMs) {
       const info = await this.refreshState();
       onProgress?.(info);
-      if (READY_STATES.has(info.state)) {
+      if (READY_SESSION_STATES.has(info.state)) {
         return;
       }
-      if (DEAD_STATES.has(info.state)) {
+      if (DEAD_SESSION_STATES.has(info.state)) {
         throw await errorForDeadLivySession(this.client, info);
       }
       await sleep(2000);
@@ -167,6 +168,10 @@ export class LivySession {
       onStatement?: (stmt: LivyStatement) => void;
     }
   ): Promise<LivyStatement> {
+    if (!options?.skipDisplayWrap && !this.bootstrapped) {
+      await this.bootstrap();
+    }
+
     const submitted = await this.client.submitStatement(this.sessionId, code, kind);
     const pollInterval = getStatementPollIntervalMs();
 

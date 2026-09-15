@@ -23,10 +23,12 @@ export class EmrSparkBackend implements EmrSparkBackendAdapter {
     return this.creatingSessionByApp.has(applicationId);
   }
 
-  async listApplications(): Promise<{ region: string; applications: LivyApplication[] }> {
+  async listApplications(options?: {
+    force?: boolean;
+  }): Promise<{ region: string; applications: LivyApplication[] }> {
     const service = getEmrServerlessService();
     const region = await service.getRegion();
-    const applications = await service.listLivyApplications();
+    const applications = await service.listLivyApplications(options);
     return { region, applications };
   }
 
@@ -118,6 +120,7 @@ export class EmrSparkBackend implements EmrSparkBackendAdapter {
       refreshState: async () => {
         await session.refreshState();
       },
+      waitUntilReady: () => session.waitUntilReady(),
     };
     this.sessions.set(handle, session);
     return handle;
@@ -137,9 +140,7 @@ export class EmrSparkBackend implements EmrSparkBackendAdapter {
   ): Promise<LivySession> {
     const inFlight = this.creatingSessionByApp.get(applicationId);
     if (inFlight) {
-      throw new Error(
-        'A Livy session is already being created for this application. Please wait for it to finish.'
-      );
+      return inFlight;
     }
 
     const createPromise = factory();
@@ -167,6 +168,3 @@ export class EmrSparkBackend implements EmrSparkBackendAdapter {
     return session;
   }
 }
-
-/** @deprecated Use EmrSparkBackend */
-export { EmrSparkBackend as ConnectionManager };

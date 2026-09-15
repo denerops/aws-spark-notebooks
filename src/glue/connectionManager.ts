@@ -17,11 +17,11 @@ import type { LivyStatement, StatementKind } from '../livy/types';
  * and AWS session work. Does not write notebook metadata.
  */
 export class GlueSparkBackend implements GlueSparkBackendAdapter {
-  private creatingSession = false;
+  private creatingSession: Promise<GlueLivySession> | undefined;
   private readonly sessions = new WeakMap<SparkSessionHandle, GlueLivySession>();
 
   isCreatingSession(): boolean {
-    return this.creatingSession;
+    return Boolean(this.creatingSession);
   }
 
   async listSessions(): Promise<{ region: string; sessions: GlueSessionSummary[] }> {
@@ -35,7 +35,7 @@ export class GlueSparkBackend implements GlueSparkBackendAdapter {
     const region = await getDefaultRegion();
     const session = await GlueLivySession.attach(region, sessionId);
     const handle = this.wrap(session);
-    void this.refreshDashboard(handle).catch(() => undefined);
+    await this.refreshDashboard(handle).catch(() => undefined);
     return handle;
   }
 
@@ -100,6 +100,7 @@ export class GlueSparkBackend implements GlueSparkBackendAdapter {
       refreshState: async () => {
         await session.refreshState();
       },
+      waitUntilReady: () => session.waitUntilReady(),
     };
     this.sessions.set(handle, session);
     return handle;
@@ -117,14 +118,15 @@ export class GlueSparkBackend implements GlueSparkBackendAdapter {
     factory: () => Promise<GlueLivySession>
   ): Promise<GlueLivySession> {
     if (this.creatingSession) {
-      throw new Error('A Glue session is already being created. Please wait for it to finish.');
+      return this.creatingSession;
     }
 
-    this.creatingSession = true;
+    const createPromise = factory();
+    this.creatingSession = createPromise;
     try {
-      return await factory();
+      return await createPromise;
     } finally {
-      this.creatingSession = false;
+      this.creatingSession = undefined;
     }
   }
 
@@ -134,7 +136,7 @@ export class GlueSparkBackend implements GlueSparkBackendAdapter {
       sessionName: params.sessionName,
     });
     const session = await GlueLivySession.create(region, input);
-    void this.finishSessionSetup(session, params.preset?.pythonPackages);
+    await this.finishSessionSetup(session, params.preset?.pythonPackages);
     return session;
   }
 
@@ -153,6 +155,3 @@ export class GlueSparkBackend implements GlueSparkBackendAdapter {
     await this.refreshDashboard(this.wrap(session)).catch(() => undefined);
   }
 }
-
-/** @deprecated Use GlueSparkBackend */
-export { GlueSparkBackend as GlueConnectionManager };

@@ -5,6 +5,7 @@ import type {
   GlueSparkBackendAdapter,
   SparkBackend,
 } from '../platform/sparkBackend';
+import type { EmrSessionCatalog, GlueSessionCatalog } from '../platform/sessionCatalog';
 import { EmrKernelSteps } from './emrKernelSteps';
 import { GlueKernelSteps } from './glueKernelSteps';
 import type { KernelSelectionSteps } from './kernelSelectionSteps';
@@ -19,16 +20,32 @@ export function createKernelSelectionSteps(
   glue: GlueSparkBackendAdapter,
   emrPresetStore: SessionPresetStore,
   gluePresetStore: GlueSessionPresetStore,
-  ui: WizardUi = createVscodeWizardUi()
+  options?: {
+    ui?: WizardUi;
+    catalogs?: { emr?: EmrSessionCatalog; glue?: GlueSessionCatalog };
+  }
 ): Record<SparkBackend, KernelSelectionSteps> {
+  const ui = options?.ui ?? createVscodeWizardUi();
   return {
-    emr: new EmrKernelSteps(emr, emrPresetStore, ui, {
-      pickPreset: pickSessionPreset,
-      promptName: promptSessionName,
-    }),
-    glue: new GlueKernelSteps(glue, gluePresetStore, ui, {
-      pickPreset: pickGlueSessionPreset,
-      promptName: promptSessionName,
-    }),
+    emr: new EmrKernelSteps(
+      emr,
+      emrPresetStore,
+      ui,
+      {
+        pickPreset: pickSessionPreset,
+        promptName: promptSessionName,
+      },
+      options?.catalogs?.emr
+    ),
+    glue: new GlueKernelSteps(
+      glue,
+      gluePresetStore,
+      ui,
+      {
+        pickPreset: pickGlueSessionPreset,
+        promptName: promptSessionName,
+      },
+      options?.catalogs?.glue
+    ),
   };
 }

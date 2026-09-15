@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import type { SessionPreset } from '../../session/presets';
 import type { GlueSessionPreset } from '../../glue/presets';
 import { FakeEmrAdapter, FakeGlueAdapter } from '../../platform/__tests__/fakes';
+import { EmrSessionCatalog } from '../../platform/sessionCatalog';
 import { EmrKernelSteps } from '../emrKernelSteps';
 import { GlueKernelSteps } from '../glueKernelSteps';
 import { FakeWizardUi } from './fakeWizardUi';
@@ -98,6 +99,45 @@ describe('EmrKernelSteps DTO mapping', () => {
 
     const result = await steps.listAttachTargets();
     assert.equal(result.status, 'empty');
+  });
+
+  it('reads attach targets from the session catalog when provided', async () => {
+    const emr = new FakeEmrAdapter();
+    emr.applications = [
+      {
+        id: 'app-1',
+        name: 'CatalogApp',
+        state: 'STARTED',
+        livyEndpointEnabled: true,
+      },
+    ];
+    emr.sessionsByApp.set('app-1', [
+      { id: 11, name: 'from-catalog', state: 'idle', kind: 'pyspark' },
+    ]);
+    const catalog = new EmrSessionCatalog(emr, { pollIntervalMs: 50_000 });
+    await catalog.refresh();
+    emr.sessionsByApp.set('app-1', []);
+
+    const ui = new FakeWizardUi();
+    ui.enqueueQuickPick((items) => items.find((i) => i.label === 'CatalogApp'));
+    const steps = new EmrKernelSteps(
+      emr,
+      {} as never,
+      ui,
+      {
+        pickPreset: async () => undefined,
+        promptName: async () => undefined,
+      },
+      catalog
+    );
+    const result = await steps.listAttachTargets();
+    catalog.dispose();
+
+    assert.equal(result.status, 'ready');
+    if (result.status !== 'ready') {
+      return;
+    }
+    assert.equal(result.targets[0]?.attach.sessionId, 11);
   });
 
   it('builds EMR create params with progress hooks', async () => {

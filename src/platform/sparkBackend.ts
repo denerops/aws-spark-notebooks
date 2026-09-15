@@ -28,6 +28,7 @@ export interface SparkSessionHandle {
     }
   ): Promise<LivyStatement>;
   refreshState(): Promise<void>;
+  waitUntilReady(): Promise<void>;
 }
 
 export interface EmrCreateParams {
@@ -77,7 +78,9 @@ export type SparkUiTarget =
 
 /** Spark Backend adapter: AWS session work only — never writes notebook metadata. */
 export interface EmrSparkBackendAdapter {
-  listApplications(): Promise<{ region: string; applications: LivyApplication[] }>;
+  listApplications(options?: {
+    force?: boolean;
+  }): Promise<{ region: string; applications: LivyApplication[] }>;
   listSessions(applicationId: string): Promise<LivySessionInfo[]>;
   attach(applicationId: string, sessionId: number): Promise<SparkSessionHandle>;
   create(params: EmrCreateParams): Promise<SparkSessionHandle>;

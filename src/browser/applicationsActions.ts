@@ -11,65 +11,16 @@ import { pickSessionPreset } from '../ui/pickSessionPreset';
 import { promptSessionName } from '../ui/promptSessionName';
 import { reportSessionStartupFailure, showSessionStartupLogs } from '../ui/sessionStartupError';
 import { openEmrSparkNotebook } from '../notebook/openNotebook';
-import { isEmrSparkNotebook } from '../notebook/types';
 import {
   ApplicationsTreeItem,
   type ApplicationsTreeProvider,
 } from './applicationsTreeProvider';
+import {
+  findOpenSparknb,
+  getActiveSparknb,
+  resolveNotebookForAttach,
+} from './attachNotebook';
 import type { EmrKernelManager } from '../notebook/kernelManager';
-
-function getActiveSparknb(): vscode.NotebookDocument | undefined {
-  const editor = vscode.window.activeNotebookEditor;
-  if (editor && isEmrSparkNotebook(editor.notebook)) {
-    return editor.notebook;
-  }
-  return undefined;
-}
-
-function findOpenSparknb(): vscode.NotebookDocument | undefined {
-  const active = getActiveSparknb();
-  if (active) {
-    return active;
-  }
-  return vscode.workspace.notebookDocuments.find((nb) => isEmrSparkNotebook(nb));
-}
-
-async function resolveNotebookForAttach(
-  applicationId: string,
-  sessionId: number
-): Promise<vscode.NotebookDocument> {
-  const active = getActiveSparknb();
-  if (active) {
-    return active;
-  }
-
-  const existing = vscode.workspace.notebookDocuments.find(
-    (nb) =>
-      isEmrSparkNotebook(nb) &&
-      (nb.metadata?.emrServerless as { applicationId?: string; sessionId?: number } | undefined)
-        ?.applicationId === applicationId &&
-      (nb.metadata?.emrServerless as { sessionId?: number } | undefined)?.sessionId === sessionId
-  );
-
-  if (existing) {
-    await vscode.window.showNotebookDocument(existing);
-    return existing;
-  }
-
-  const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
-  const target = folder
-    ? vscode.Uri.joinPath(folder, `spark-${Date.now()}.ipynb`)
-    : vscode.Uri.parse(`untitled:spark-${Date.now()}.ipynb`);
-
-  const doc = createBlankSparknbDocument();
-  const bytes = new TextEncoder().encode(JSON.stringify(doc, null, 2));
-  await vscode.workspace.fs.writeFile(target, bytes);
-  const notebook = await openEmrSparkNotebook(target);
-  if (!notebook) {
-    throw new Error(`Failed to open notebook: ${target.fsPath}`);
-  }
-  return notebook;
-}
 
 export function registerApplicationsActions(
   context: vscode.ExtensionContext,
@@ -260,7 +211,33 @@ export function registerApplicationsActions(
           return;
         }
         try {
-          const notebook = await resolveNotebookForAttach(appId, sessionId);
+          const notebook = await resolveNotebookForAttach({
+            connection,
+            sessionLabel: `session ${sessionId}`,
+            isThisSession: (nb) => {
+              const meta = nb.metadata?.emrServerless as
+                | { applicationId?: string; sessionId?: number }
+                | undefined;
+              return meta?.applicationId === appId && meta?.sessionId === sessionId;
+            },
+            createNotebook: async () => {
+              const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+              const target = folder
+                ? vscode.Uri.joinPath(folder, `spark-${Date.now()}.ipynb`)
+                : vscode.Uri.parse(`untitled:spark-${Date.now()}.ipynb`);
+              const doc = createBlankSparknbDocument();
+              const bytes = new TextEncoder().encode(JSON.stringify(doc, null, 2));
+              await vscode.workspace.fs.writeFile(target, bytes);
+              const created = await openEmrSparkNotebook(target);
+              if (!created) {
+                throw new Error(`Failed to open notebook: ${target.fsPath}`);
+              }
+              return created;
+            },
+          });
+          if (!notebook) {
+            return;
+          }
           await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,

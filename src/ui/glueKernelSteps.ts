@@ -1,5 +1,6 @@
 import { formatGlueSessionLabel } from '../glue/types';
 import type { GlueSessionPreset, GlueSessionPresetStore } from '../glue/presets';
+import type { GlueSessionCatalog } from '../platform/sessionCatalog';
 import type {
   CreateForNotebookParams,
   CreatingSessionQuery,
@@ -30,7 +31,8 @@ export class GlueKernelSteps implements KernelSelectionSteps {
     private readonly glue: GlueSparkBackendAdapter,
     private readonly presetStore: GlueSessionPresetStore,
     private readonly ui: WizardUi,
-    private readonly deps: GlueKernelStepsDeps
+    private readonly deps: GlueKernelStepsDeps,
+    private readonly catalog?: GlueSessionCatalog
   ) {}
 
   creatingQuery(): CreatingSessionQuery {
@@ -41,11 +43,20 @@ export class GlueKernelSteps implements KernelSelectionSteps {
     let region: string;
     let sessions;
     try {
-      const listed = await this.ui.withProgress('Loading Glue sessions…', () =>
-        this.glue.listSessions()
-      );
-      region = listed.region;
-      sessions = listed.sessions;
+      if (this.catalog) {
+        await this.ui.withProgress('Loading Glue sessions…', () => this.catalog!.refreshIfStale());
+        if (this.catalog.loadError) {
+          return { status: 'error', message: this.catalog.loadError };
+        }
+        region = this.catalog.region;
+        sessions = this.catalog.sessions;
+      } else {
+        const listed = await this.ui.withProgress('Loading Glue sessions…', () =>
+          this.glue.listSessions()
+        );
+        region = listed.region;
+        sessions = listed.sessions;
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { status: 'error', message };
